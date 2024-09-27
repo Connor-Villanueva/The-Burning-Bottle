@@ -16,7 +16,7 @@ def get_inventory():
     """ """
     
     with db.engine.begin() as connection:
-        inventory = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).fetchall
+        inventory = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).fetchall()
         return inventory
 
 
