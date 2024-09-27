@@ -19,7 +19,7 @@ def get_inventory():
         inventory = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).fetchall()
         print(inventory)
     
-    return {"number_of_potions": inventory[1][2], "ml_in_barrels": inventory[1][3], "gold": inventory[1][4]}
+    return {"number_of_potions": inventory[0][2], "ml_in_barrels": inventory[0][3], "gold": inventory[0][4]}
 
 # Gets called once a day
 @router.post("/plan")
