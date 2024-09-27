@@ -16,11 +16,12 @@ def get_inventory():
     """ """
     
     with db.engine.begin() as connection:
-        gold = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory"))
+        inventory = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).fetchall
+        return inventory
 
 
     
-    return {"number_of_potions": 0, "ml_in_barrels": 0, "gold": gold.fetchone}
+    #return {"number_of_potions": 0, "ml_in_barrels": 0, "gold": }
 
 # Gets called once a day
 @router.post("/plan")
