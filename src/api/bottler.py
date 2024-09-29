@@ -53,17 +53,18 @@ def get_bottle_plan():
     with db.engine.begin() as connection:
         num_green_ml = connection.execute(sqlalchemy.text("SELECT num_green_ml FROM global_inventory")).fetchone()[0]
     
-    num_green_potions = 0
-    while (num_green_ml % 100 == 0 and num_green_ml > 0) :
-        num_green_potions += 1
-        num_green_ml -= 100
-    
-    bottle_plan.append(
-        {
-            "potion_type": [0, 100, 0, 0],
-            "quantity": num_green_potions
-        }
-    )
+    if (num_green_ml >= 100):
+        num_green_potions = 0
+        while (num_green_ml % 100 == 0 and num_green_ml > 0) :
+            num_green_potions += 1
+            num_green_ml -= 100
+        
+        bottle_plan.append(
+            {
+                "potion_type": [0, 100, 0, 0],
+                "quantity": num_green_potions
+            }
+        )
 
 
     return bottle_plan
