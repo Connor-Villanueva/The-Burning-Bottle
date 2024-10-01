@@ -140,7 +140,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         quantity_inventory = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory")).fetchone()[0]
         quantity_sold = connection.execute(sqlalchemy.text("SELECT quantity FROM carts WHERE cart_id = :cart_id"), {'cart_id': cart_id}).fetchone()[0]
 
-        gold_inventory = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0]
+        gold_inventory = int(connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
 
         quantity_inventory -= quantity_sold
         gold_inventory += int(cart_checkout.payment)
