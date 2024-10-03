@@ -81,24 +81,36 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     print(customers)
 
+    with db.engine.begin() as connection:
+        #Check if customer exists in database
+        for c in customers:
+            result = connection.execute(sqlalchemy.text("SELECT name FROM customers WHERE name = :customer_name"), 
+                                        {
+                                            'customer_name': c.customer_name
+                                        }).fetchone()
+            if (result is not None):
+                print(f"customer exists: {c.customer_name}")
+            else:
+                #If customer is not in database, add to customers and create an empty cart with cart_id = user_id
+                #This guaratees each customer has a cart
+                connection.execute(sqlalchemy.text(f"INSERT INTO customers (name, class, level) VALUES ('{c.customer_name}', '{c.character_class}', {c.level})"))
+                user_id = connection.execute(sqlalchemy.text(f"SELECT user_id FROM customers WHERE name = :customer_name"), {'customer_name': c.customer_name}).fetchone()[0]
+                connection.execute(sqlalchemy.text(f"INSERT INTO carts (cart_id) VALUES ({user_id})"))
+
     return "OK"
 
 
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
+    #Since each customer has a cart, find the cart, reset all values, return cart_id
     with db.engine.begin() as connection:
-        carts = connection.execute(sqlalchemy.text("SELECT cart_id FROM carts")).fetchall()
-        if (len(carts) == 0):
-            cart_id = 1
-        else:
-            cart_id = len(carts[0]) + 1
+        user_id = connection.execute(sqlalchemy.text(f"SELECT user_id FROM customers WHERE name = '{new_cart.customer_name}'")).fetchone()[0]
 
-        insert = f"INSERT INTO carts (cart_id, item_sku, quantity) VALUES ({cart_id}, 'none', 0)"
-        connection.execute(sqlalchemy.text(insert))
-
-    return {"cart_id": cart_id}
-
+        connection.execute(sqlalchemy.text(f"UPDATE carts SET item_sku = 'none', quantity = 0 WHERE cart_id = {user_id}"))
+    
+    #cart_id = user_id
+    return user_id
 
 class CartItem(BaseModel):
     quantity: int
@@ -137,18 +149,11 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        quantity_inventory = connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory")).fetchone()[0]
-        quantity_sold = connection.execute(sqlalchemy.text("SELECT quantity FROM carts WHERE cart_id = :cart_id"), {'cart_id': cart_id}).fetchone()[0]
+        cart = connection.execute(sqlalchemy.text(f"SELECT item_sku, quantity FROM carts WHERE cart_id = {cart_id}")).fetchone()
+        inventory = connection.execute(sqlalchemy.text("SELECT num_green_potions, gold FROM test_inventory")).fetchone()
 
-        gold_inventory = int(connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
-
-        quantity_inventory -= quantity_sold
-        gold_inventory += int(cart_checkout.payment)
-
-        update_inventory = f"UPDATE global_inventory SET num_green_potions = {quantity_inventory}, gold = {gold_inventory}"
-        connection.execute(sqlalchemy.text(update_inventory))
-
-        connection.execute(sqlalchemy.text("DELETE FROM carts WHERE cart_id = :cart_id"), {'cart_id': cart_id})
-    
-
-    return {"total_potions_bought": quantity_sold, "total_gold_paid": cart_checkout.payment}
+        #Update inventory
+        connection.execute(sqlalchemy.text(
+            f"UPDATE global_inventory SET num_green_potions = {inventory[0] - cart[1]}, gold = {inventory[1] + int(cart_checkout.payment)}"
+        ))
+    return {"total_potions_bought": cart[1], "total_gold_paid": cart_checkout.payment}
