@@ -112,6 +112,11 @@ def create_cart(new_cart: Customer):
                                          "class": new_cart.character_class,
                                          "level": new_cart.level
                                      }).fetchone()[0]
+        
+        connection.execute(sqlalchemy.text("UPDATE customer_carts SET item_sku = DEFAULT WHERE cart_id = :user_id"),
+                           {
+                               "cart_id": user_id
+                           })
     
     return {"cart_id": user_id}
 
