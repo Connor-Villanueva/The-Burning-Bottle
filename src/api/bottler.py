@@ -58,8 +58,6 @@ def get_bottle_plan():
 
     qty_needed_potions = [qty_each - p for p in current_potions]
 
-    print(qty_needed_potions)
-
     for x in zip(qty_needed_potions, current_ml, potion_types):
         max_bottles = x[1] // 100
 
