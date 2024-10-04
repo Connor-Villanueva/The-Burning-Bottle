@@ -20,19 +20,16 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     """ """
     print(f"potions delievered: {potions_delivered} order_id: {order_id}")
 
-    num_green_potions = 0
-    num_green_ml = 0
-    for potion in potions_delivered:
-        if (potion.potion_type == [0, 100, 0, 0]):
-            num_green_potions += potion.quantity
-            num_green_ml -= 100 * potion.quantity
+    ml_used = [0, 0, 0, 0]  #[r, g, b, d]
 
     with db.engine.begin() as connection:
-        num_green_potions += connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory")).fetchone()[0]
-        num_green_ml += connection.execute(sqlalchemy.text("SELECT num_green_ml FROM global_inventory")).fetchone()[0]
+
+        for potion in potions_delivered:
+            ml_used = [a+(b*potion.quantity) for a,b in zip(ml_used, potion.potion_type)]
+            
+            connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET potion_quantity = potion_quantity + {potion.quantity} WHERE potion_type = :potion_type"), {'potion_type': potion.potion_type})
         
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET num_green_potions = " + str(num_green_potions)))
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET num_green_ml = " + str(num_green_ml)))
+        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = num_red_ml - {ml_used[0]}, num_green_ml = num_green_ml - {ml_used[1]}, num_blue_ml = num_blue_ml - {ml_used[2]}, num_dark_ml = num_dark_ml - {ml_used[3]}"))
         
     return "OK"
 
@@ -51,21 +48,35 @@ def get_bottle_plan():
     # Initial logic: bottle all barrels into green potions.
 
     with db.engine.begin() as connection:
-        num_green_ml = connection.execute(sqlalchemy.text("SELECT num_green_ml FROM global_inventory")).fetchone()[0]
-    
-    if (num_green_ml >= 100):
-        num_green_potions = 0
-        while (num_green_ml % 100 == 0 and num_green_ml > 0) :
-            num_green_potions += 1
-            num_green_ml -= 100
-        
-        bottle_plan.append(
-            {
-                "potion_type": [0, 100, 0, 0],
-                "quantity": num_green_potions
-            }
-        )
+        max_num_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
+        current_potions = [p[0] for p in connection.execute(sqlalchemy.text("SELECT potion_quantity FROM potion_inventory")).fetchall()] #[r, g, b, d]
+        current_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
 
+    #Simple logic for now while only selling 3 types of potions
+    qty_each = max_num_potions // 4
+    potion_types = [[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100]]
+
+    qty_needed_potions = [qty_each - p for p in current_potions]
+
+    print(qty_needed_potions)
+
+    for x in zip(qty_needed_potions, current_ml, potion_types):
+        max_bottles = x[1] // 100
+
+        if (max_bottles >= x[0]):
+            bottle_plan.append(
+                {
+                    "potion_type": x[2],
+                    "quantity": x[0]
+                }
+            )
+        elif (max_bottles > 0):
+            bottle_plan.append(
+                {
+                    "potion_type": x[2],
+                    "quantity": max_bottles
+                }
+            )
 
     return bottle_plan
 

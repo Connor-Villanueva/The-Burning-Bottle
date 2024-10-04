@@ -24,21 +24,24 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
     print(f"barrels delievered: {barrels_delivered} order_id: {order_id}")
     
-    num_green_ml = 0
-    gold = 0
-    
-    
-    for barrel in barrels_delivered:
-        gold -= barrel.price * barrel.quantity
-        if (barrel.potion_type == [0, 1, 0, 0]):
-            num_green_ml += barrel.ml_per_barrel * barrel.quantity
-    
     with db.engine.begin() as connection:
-        num_green_ml += connection.execute(sqlalchemy.text("SELECT num_green_ml FROM global_inventory")).fetchone()[0]
-        gold += connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0]
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET num_green_ml = " + str(num_green_ml)))
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET gold = " + str(gold)))
+        current_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
+        current_gold = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0]
 
+        #Update gold
+        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {current_gold - sum(barrel.price*barrel.quantity for barrel in barrels_delivered)}"))
+
+        #Update ml quantities
+        for barrel in barrels_delivered:
+            if (barrel.potion_type == [1, 0, 0, 0]):
+                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = {current_ml[0] + barrel.ml_per_barrel*barrel.quantity}"))
+            elif (barrel.potion_type == [0, 1, 0, 0]):
+                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_green_ml = {current_ml[1] + barrel.ml_per_barrel*barrel.quantity}"))
+            elif (barrel.potion_type == [0, 0, 1, 0]):
+                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_blue_ml = {current_ml[2] + barrel.ml_per_barrel*barrel.quantity}"))
+            else:
+                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_dark_ml = {current_ml[3] + barrel.ml_per_barrel*barrel.quantity}"))
+        
     return "OK"
 
 # Gets called once a day
@@ -50,20 +53,45 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     purchase_plan = []
 
     with db.engine.begin() as connection:
-        num_green_potions = (connection.execute(sqlalchemy.text("SELECT num_green_potions FROM global_inventory")).fetchone())[0]
-        gold = (connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone())[0]
+        ml_inventory = sum(connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml FROM global_inventory")).fetchone())
+        ml_max = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
+        budget = int(1 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
 
-    if (num_green_potions < 10):
-        for barrel in wholesale_catalog:
-            if (barrel.sku == "SMALL_GREEN_BARREL" and barrel.price <= gold):
+    #Only concerned with selling red, blue, and green potions
+    #Limit purchasing only to Small Barrels
+    barrel_catalog = sorted(list(filter(lambda b: b.ml_per_barrel == 500, wholesale_catalog)), key = lambda b: b.potion_type, reverse = True)
+
+    #Minimum number of each barrel that can be purchased considering budget and max inventory
+    min_qty_budget = budget // sum(barrel.price for barrel in barrel_catalog)
+    min_qty_ml = (ml_max-ml_inventory) // sum(barrel.ml_per_barrel for barrel in barrel_catalog)
+
+    qty_each = min(min_qty_budget, min_qty_ml)
+
+    if (qty_each == 0):
+        cheapest_barrel = min(barrel_catalog, key = lambda b: b.price)
+        
+        purchase_plan.append(
+            {
+                "sku": cheapest_barrel.sku,
+                "quantity": 1
+            }
+        )
+    else:
+        for barrel in barrel_catalog:
+            if (barrel.quantity < qty_each):
                 purchase_plan.append(
                     {
                         "sku": barrel.sku,
-                        "quantity": 1
+                        "quantity": barrel.quantity
                     }
                 )
-
-    #For future purchases, keeping track of gold within locally is necessay to prevent an invalid purchase plan
+            else:
+                purchase_plan.append(
+                    {
+                        "sku": barrel.sku,
+                        "quantity": qty_each
+                    }
+                    )
     
     return purchase_plan
 
