@@ -69,29 +69,46 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     if (qty_each == 0):
         cheapest_barrel = min(barrel_catalog, key = lambda b: b.price)
-        
-        purchase_plan.append(
-            {
-                "sku": cheapest_barrel.sku,
-                "quantity": 1
-            }
-        )
+        if (cheapest_barrel.price <= budget):
+            purchase_plan.append(
+                {
+                    "sku": cheapest_barrel.sku,
+                    "quantity": 1
+                }
+            )
     else:
+        total_cost = 0
         for barrel in barrel_catalog:
-            if (barrel.quantity < qty_each):
-                purchase_plan.append(
-                    {
-                        "sku": barrel.sku,
-                        "quantity": barrel.quantity
-                    }
-                )
-            else:
-                purchase_plan.append(
-                    {
-                        "sku": barrel.sku,
-                        "quantity": qty_each
-                    }
+            max_affordable_qty = budget // barrel.price
+            
+            qty_to_purchase = min(qty_each, max_affordable_qty)
+
+            if (qty_to_purchase > 0):
+                if (barrel.quantity < qty_to_purchase):
+                    qty_to_purchase = barrel.quantity
+                
+                cost = qty_to_purchase * barrel.price
+                if (total_cost + cost <= budget):
+                    purchase_plan.append(
+                        {
+                            "sku": barrel.sku,
+                            "quantity": qty_to_purchase
+                        }
                     )
-    
+                    total_cost += cost
+                    budget -= cost
+                else:
+                    #Exceeded budget, purchase minimum
+                    qty_to_purchase = budget // barrel.price
+                    if qty_to_purchase > 0:
+                        cost = qty_to_purchase * barrel.price
+                        purchase_plan.append(
+                            {
+                                "sku": barrel.sku,
+                                "quantity": qty_to_purchase
+                            }
+                        )
+                        total_cost += cost
+                        budget -= cost
     return purchase_plan
 
