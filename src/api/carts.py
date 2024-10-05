@@ -4,7 +4,6 @@ from src.api import auth
 from enum import Enum
 import sqlalchemy
 from src import database as db
-import json
 
 router = APIRouter(
     prefix="/carts",
@@ -161,6 +160,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         profit = 0
         potions_sold = sum(p[1] for p in items_purchased)
 
+        timestamp = connection.execute(sqlalchemy.text("SELECT latest_day, latest_hour FROM time_info")).fetchone()
+
         for item in items_purchased:
             price = connection.execute(sqlalchemy.text("SELECT potion_price FROM potion_inventory WHERE potion_sku = :potion_sku"),
             {
@@ -175,10 +176,22 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 "potion_qty": item[1],
                 "potion_sku": item[0]
             })
+
+            #Update completed orders for tracking purposes
+            connection.execute(sqlalchemy.text("INSERT INTO completed_orders (customer_id, potion_sku, quantity, day, hour) VALUES (:cart_id, :potion_sku, :quantity, :day, :hour)"),
+                               {
+                                   "cart_id": cart_id,
+                                   "potion_sku": item[0],
+                                   "quantity": item[1],
+                                   "day":timestamp[0],
+                                   "hour":timestamp[1]
+                               })
         connection.execute(sqlalchemy.text("UPDATE global_inventory SET gold = gold + :profit"),
         {
             "profit":profit
         })
+
+
 
 
     return {"total_potions_bought": potions_sold, "total_gold_paid": profit}
