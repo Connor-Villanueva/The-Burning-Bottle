@@ -49,8 +49,15 @@ def get_bottle_plan():
 
     with db.engine.begin() as connection:
         max_num_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
-        current_potions = [p[0] for p in connection.execute(sqlalchemy.text("SELECT potion_quantity FROM potion_inventory")).fetchall()] #[r, g, b, d]
+
+        #[r, g, b, d]
+        current_potions = [p[0] for p in list(sorted(connection.execute(sqlalchemy.text(
+            "SELECT potion_quantity, potion_type FROM potion_inventory"
+        )).fetchall(), key = lambda p: p[1], reverse=True))]
         current_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
+
+
+        
 
     #Simple logic for now while only selling 3 types of potions
     qty_each = max_num_potions // 4
@@ -60,15 +67,20 @@ def get_bottle_plan():
 
     for x in zip(qty_needed_potions, current_ml, potion_types):
         max_bottles = x[1] // 100
+        print(f"{x[0]} and {x[1]} and {x[2]} and {max_bottles}")
 
-        if (max_bottles >= x[0]):
+        #There are cases where there are enough ml to make potions, but dont want to
+        #In this case, qty_needed < 0
+        #Check if qty_needed > 0 before appending
+        
+        if (max_bottles >= x[0] and x[0] > 0):
             bottle_plan.append(
                 {
                     "potion_type": x[2],
                     "quantity": x[0]
                 }
             )
-        elif (max_bottles > 0):
+        elif (max_bottles > 0 and x[0] > 0):
             bottle_plan.append(
                 {
                     "potion_type": x[2],
