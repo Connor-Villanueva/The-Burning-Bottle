@@ -67,7 +67,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as connection:
         ml_inventory = sum(connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml FROM global_inventory")).fetchone())
         ml_max = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
-        budget = int(1 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
+        budget = int(0.85 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
 
     #Only concerned with selling red, blue, and green potions
     #Limit purchasing only to Small Barrels
