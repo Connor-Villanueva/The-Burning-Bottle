@@ -67,8 +67,7 @@ def get_bottle_plan():
 
     for x in zip(qty_needed_potions, current_ml, potion_types):
         max_bottles = x[1] // 100
-        print(f"{x[0]} and {x[1]} and {x[2]} and {max_bottles}")
-
+        
         #There are cases where there are enough ml to make potions, but dont want to
         #In this case, qty_needed < 0
         #Check if qty_needed > 0 before appending
