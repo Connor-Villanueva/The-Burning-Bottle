@@ -60,67 +60,52 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
-    print(wholesale_catalog)
+    #print(wholesale_catalog)
 
     purchase_plan = []
 
     with db.engine.begin() as connection:
-        ml_inventory = sum(connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml FROM global_inventory")).fetchone())
+        ml_inventory = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
         ml_max = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
-        budget = int(0.85 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
+        budget = int(1 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
 
-    #Only concerned with selling red, blue, and green potions
-    #Limit purchasing only to Small Barrels
-    barrel_catalog = sorted(list(filter(lambda b: b.ml_per_barrel == 500, wholesale_catalog)), key = lambda b: b.potion_type, reverse = True)
+    #Sorts barrel catalog by potion_type (r -> g -> b -> d) and by decreasing size
+    barrel_catalog = sorted(wholesale_catalog, key = lambda b: (b.potion_type, b.ml_per_barrel), reverse=True)
+    barrel_types = [ [1,0,0,0] , [0,1,0,0] , [0, 0, 1, 0], [0, 0, 0, 1]]
+    ml_needed_each = [ml_max//4 - x for x in ml_inventory]
 
-    #Minimum number of each barrel that can be purchased considering budget and max inventory
-    min_qty_budget = budget // sum(barrel.price for barrel in barrel_catalog)
-    min_qty_ml = (ml_max-ml_inventory) // sum(barrel.ml_per_barrel for barrel in barrel_catalog)
+    if (budget >= 400):
+        for x in zip(barrel_types, ml_needed_each):
+            max_budget = budget // 4
+            ml = x[1]
+            for barrel in barrel_catalog:
+                if barrel.potion_type == x[0] and ml > 0:
+                    max_qty = ml//barrel.ml_per_barrel
 
-    qty_each = min(min_qty_budget, min_qty_ml)
-
-    if (qty_each == 0):
-        cheapest_barrel = min(barrel_catalog, key = lambda b: b.price)
-        if (cheapest_barrel.price <= budget):
-            purchase_plan.append(
-                {
-                    "sku": cheapest_barrel.sku,
-                    "quantity": 1
-                }
-            )
-    else:
-        total_cost = 0
-        for barrel in barrel_catalog:
-            max_affordable_qty = budget // barrel.price
-            
-            qty_to_purchase = min(qty_each, max_affordable_qty)
-
-            if (qty_to_purchase > 0):
-                if (barrel.quantity < qty_to_purchase):
-                    qty_to_purchase = barrel.quantity
-                
-                cost = qty_to_purchase * barrel.price
-                if (total_cost + cost <= budget):
-                    purchase_plan.append(
-                        {
-                            "sku": barrel.sku,
-                            "quantity": qty_to_purchase
-                        }
-                    )
-                    total_cost += cost
-                    budget -= cost
-                else:
-                    #Exceeded budget, purchase minimum
-                    qty_to_purchase = budget // barrel.price
-                    if qty_to_purchase > 0:
-                        cost = qty_to_purchase * barrel.price
+                    max_qty = min(max_qty, max_budget//barrel.price)
+                    
+                    if (max_budget > 0 and max_qty > 0):
                         purchase_plan.append(
                             {
                                 "sku": barrel.sku,
-                                "quantity": qty_to_purchase
+                                "quantity": max_qty
                             }
                         )
-                        total_cost += cost
-                        budget -= cost
+                        max_budget -= barrel.price * max_qty
+                        ml -= max_qty * barrel.ml_per_barrel
+    else:
+        min_barrel = min(filter(lambda b: b.ml_per_barrel == 500, barrel_catalog), key = lambda b: b.price)
+        
+        if (min_barrel.price <= budget):
+            purchase_plan.append(
+                {
+                    "sku": min_barrel.sku,
+                    "quantity": budget // min_barrel.price
+                }
+            )
+
+    
+
+
     return purchase_plan
 

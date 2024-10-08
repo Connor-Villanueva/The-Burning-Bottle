@@ -35,6 +35,25 @@ def get_capacity_plan():
     capacity unit costs 1000 gold.
     """
 
+    # capacity_plan = []
+
+    # with db.engine.begin() as connection:
+    #     num_each_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
+    #     max_ml = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
+    #     num_each_potion = connection.execute(sqlalchemy.text("SELECT potion_quantity FROM potion_inventory")).fetchall()
+    #     max_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
+    #     gold = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0]
+
+    # if ((sum(num_each_ml)/max_ml >= 0.25 or sum(row[0] for row in num_each_potion)/max_potions >= 0.25) and gold >= 1000):
+    #     capacity_plan.append(
+    #         {
+    #             "potion_capacity": max_potions/50 + 1,
+    #             "ml_capacity": max_ml/10_000 + 1
+    #         }
+    #     )
+
+
+
     return {
         "potion_capacity": 0,
         "ml_capacity": 0
