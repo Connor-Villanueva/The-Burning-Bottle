@@ -67,7 +67,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     with db.engine.begin() as connection:
         ml_inventory = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
         ml_max = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
-        budget = int(1 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
+        budget = int(.85 * connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0])
 
     #Sorts barrel catalog by potion_type (r -> g -> b -> d) and by decreasing size
     barrel_catalog = sorted(wholesale_catalog, key = lambda b: (b.potion_type, b.ml_per_barrel), reverse=True)
