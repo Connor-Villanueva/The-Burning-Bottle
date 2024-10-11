@@ -35,24 +35,19 @@ def get_capacity_plan():
     capacity unit costs 1000 gold.
     """
 
-    # capacity_plan = []
+    with db.engine.begin() as connection:
+        inventory = connection.execute(sqlalchemy.text(
+            "SELECT gold, max_potions, max_ml, SUM(num_red_ml + num_green_ml + num_blue_ml + num_dark_ml) FROM global_inventory GROUP BY gold, max_potions, max_ml"
+        )).fetchone()
+        potions_inventory = connection.execute(sqlalchemy.text(
+            "SELECT SUM(potion_quantity) FROM potion_inventory"
+        )).fetchone()[0]
 
-    # with db.engine.begin() as connection:
-    #     num_each_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
-    #     max_ml = connection.execute(sqlalchemy.text("SELECT max_ml FROM global_inventory")).fetchone()[0]
-    #     num_each_potion = connection.execute(sqlalchemy.text("SELECT potion_quantity FROM potion_inventory")).fetchall()
-    #     max_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
-    #     gold = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).fetchone()[0]
-
-    # if ((sum(num_each_ml)/max_ml >= 0.25 or sum(row[0] for row in num_each_potion)/max_potions >= 0.25) and gold >= 1000):
-    #     capacity_plan.append(
-    #         {
-    #             "potion_capacity": max_potions/50 + 1,
-    #             "ml_capacity": max_ml/10_000 + 1
-    #         }
-    #     )
-
-
+    if ((inventory[3]/inventory[2] > 0.5 or potions_inventory/inventory[1] > 0.5) and inventory[0] > 3000):
+        return {
+            "potion_capacity": 1,
+            "ml_capacity": 1
+        }
 
     return {
         "potion_capacity": 0,
@@ -70,5 +65,12 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
+    with db.engine.begin() as connection:
+        current_plan = connection.execute(sqlalchemy.text("UPDATE global_inventory SET max_potions = max_potions + :added_potions, max_ml = max_ml + :added_ml"),
+                                          {
+                                              "added_potions": capacity_purchase.potion_capacity * 50,
+                                              "added_ml": capacity_purchase.ml_capacity * 10000
+                                          })
+    print(capacity_purchase)
 
     return "OK"
