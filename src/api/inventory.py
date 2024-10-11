@@ -66,10 +66,12 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
     capacity unit costs 1000 gold.
     """
     with db.engine.begin() as connection:
-        current_plan = connection.execute(sqlalchemy.text("UPDATE global_inventory SET max_potions = max_potions + :added_potions, max_ml = max_ml + :added_ml"),
+        current_plan = connection.execute(sqlalchemy.text(
+            "UPDATE global_inventory SET max_potions = max_potions + :added_potions, max_ml = max_ml + :added_ml, gold = gold - :price"),
                                           {
                                               "added_potions": capacity_purchase.potion_capacity * 50,
-                                              "added_ml": capacity_purchase.ml_capacity * 10000
+                                              "added_ml": capacity_purchase.ml_capacity * 10000,
+                                              "price" : 2000
                                           })
     print(capacity_purchase)
 
