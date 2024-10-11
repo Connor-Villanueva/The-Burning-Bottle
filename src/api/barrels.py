@@ -83,7 +83,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 if barrel.potion_type == x[0] and ml > 0:
                     max_qty = ml//barrel.ml_per_barrel
 
-                    max_qty = min(max_qty, max_budget//barrel.price)
+                    max_qty = min(max_qty, max_budget//barrel.price, barrel.quantity)
                     
                     if (max_budget > 0 and max_qty > 0):
                         purchase_plan.append(
