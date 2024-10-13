@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
 from src import database as db
+import random
 
 router = APIRouter(
     prefix="/bottler",
@@ -45,15 +46,13 @@ def get_bottle_plan():
     # green potion to add.
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
-    # Initial logic: bottle all barrels into green potions.
-
     with db.engine.begin() as connection:
         max_num_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
 
         #[r, g, b, d]
         current_potions = [p[0] for p in list(sorted(connection.execute(sqlalchemy.text(
-            "SELECT potion_quantity, potion_type FROM potion_inventory"
-        )).fetchall(), key = lambda p: p[1], reverse=True))]
+            "SELECT potion_quantity, potion_type FROM potion_inventory WHERE potion_sku in :potion_sku"
+        ), {'potion_sku': ("RGBD_100_0_0_0","RGBD_0_100_0_0", "RGBD_0_0_100_0", "RGBD_0_0_0_100")}).fetchall(), key = lambda p: p[1], reverse=True))]
         current_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
 
 
@@ -61,7 +60,8 @@ def get_bottle_plan():
 
     #Simple logic for now while only selling 3 types of potions
     qty_each = max_num_potions // 4
-    potion_types = [[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100]]
+    print(qty_each)
+    potion_types = [ [100,0,0,0], [0,100,0,0], [0,0,100,0], [0,0,0,100]]
 
     qty_needed_potions = [qty_each - p for p in current_potions]
 
