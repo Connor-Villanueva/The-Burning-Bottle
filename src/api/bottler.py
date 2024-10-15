@@ -94,7 +94,6 @@ def get_bottle_plan():
         max_potions = [a//b for (a,b) in zip(ml_liquid, p[0]) if b != 0]
         max_potions = min(qty_each, min(max_potions))
 
-
         if (p[1] < max_potions):
             bottle_plan.append(
                 {
@@ -103,7 +102,6 @@ def get_bottle_plan():
                 }
             )
             ml_liquid = [a-b*(max_potions - p[1]) for (a,b) in zip(ml_liquid, p[0])]
-        print(f"After: {ml_liquid}")
     return bottle_plan
 
 if __name__ == "__main__":
