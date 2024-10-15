@@ -47,46 +47,63 @@ def get_bottle_plan():
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
-        max_num_potions = connection.execute(sqlalchemy.text("SELECT max_potions FROM global_inventory")).fetchone()[0]
+        max_qty_day = connection.execute(sqlalchemy.text(
+            "SELECT max_potions, latest_day FROM global_inventory JOIN time_info ON global_inventory.id = time_info.id ")).fetchone()
+        ml_liquid = connection.execute(sqlalchemy.text(
+            "SELECT num_red_ml, num_green_ml, num_blue_ml FROM global_inventory"
+        )).fetchone()
+        current_qty = connection.execute(sqlalchemy.text(
+            "SELECT sum(potion_quantity) FROM potion_inventory"
+        )).fetchone()[0]
+        #Calculates and returns relative probabilities of top 6 potions types on a given day
+        potion_distribution = connection.execute(sqlalchemy.text(
+            '''
+            WITH
+            daily_totals as (
+            SELECT day, sum(quantity) AS day_total
+            FROM completed_orders
+            GROUP BY day
+            )
+            SELECT co.potion_sku, ROUND(SUM(co.quantity)::decimal / dt.day_total, 2) as relative_potion_probability
+            FROM completed_orders co
+            JOIN daily_totals dt ON co.day = dt.day
+            WHERE co.day = :day
+            GROUP BY co.potion_sku, co.day, dt.day_total
+            ORDER BY co.day
+            LIMIT 6;
+            '''
+        ), {"day": max_qty_day[1]}).fetchall()
 
-        #[r, g, b, d]
-        current_potions = [p[0] for p in list(sorted(connection.execute(sqlalchemy.text(
-            "SELECT potion_quantity, potion_type FROM potion_inventory WHERE potion_sku in :potion_sku"
-        ), {'potion_sku': ("RGBD_100_0_0_0","RGBD_0_100_0_0", "RGBD_0_0_100_0", "RGBD_0_0_0_100")}).fetchall(), key = lambda p: p[1], reverse=True))]
-        current_ml = connection.execute(sqlalchemy.text("SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory")).fetchone()
+        #Only use potions with relative probability > 30%
+        potions = connection.execute(sqlalchemy.text(
+            "SELECT potion_type, potion_quantity FROM potion_inventory WHERE potion_sku IN :potion_sku"
+        ), {"potion_sku": tuple(p[0] for p in potion_distribution if p[1] > 0.30)}).fetchall()
+
+        if (len(potions) < 6):
+            all_potions = connection.execute(sqlalchemy.text(
+                "SELECT potion_type, potion_quantity FROM potion_inventory WHERE potion_sku NOT IN :potion_sku"
+                ), {"potion_sku": tuple(p[0] for p in potion_distribution)}).fetchall()
+            for _ in range(6-len(potions)):
+                #Append random potions
+                #Temporary: Filtering potions with dark liquid
+                #
+                potions.append(random.choice(tuple(filter(lambda p: p[0][3] == 0,all_potions))))
+    
+    qty_each = (max_qty_day[0] - current_qty) // 6
+    for p in potions:
+        max_potions = [a//b for (a,b) in zip(ml_liquid, p[0]) if b != 0]
+        max_potions = min(qty_each, min(max_potions))
 
 
-        
-
-    #Simple logic for now while only selling 3 types of potions
-    qty_each = max_num_potions // 4
-    print(qty_each)
-    potion_types = [ [100,0,0,0], [0,100,0,0], [0,0,100,0], [0,0,0,100]]
-
-    qty_needed_potions = [qty_each - p for p in current_potions]
-
-    for x in zip(qty_needed_potions, current_ml, potion_types):
-        max_bottles = x[1] // 100
-        
-        #There are cases where there are enough ml to make potions, but dont want to
-        #In this case, qty_needed < 0
-        #Check if qty_needed > 0 before appending
-        
-        if (max_bottles >= x[0] and x[0] > 0):
+        if (p[1] < max_potions):
             bottle_plan.append(
                 {
-                    "potion_type": x[2],
-                    "quantity": x[0]
+                    "potion_type": p[0],
+                    "quantity": max_potions - p[1]
                 }
             )
-        elif (max_bottles > 0 and x[0] > 0):
-            bottle_plan.append(
-                {
-                    "potion_type": x[2],
-                    "quantity": max_bottles
-                }
-            )
-
+            ml_liquid = [a-b*(max_potions - p[1]) for (a,b) in zip(ml_liquid, p[0])]
+        print(f"After: {ml_liquid}")
     return bottle_plan
 
 if __name__ == "__main__":
