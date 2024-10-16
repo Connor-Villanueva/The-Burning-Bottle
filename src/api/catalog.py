@@ -46,7 +46,7 @@ def get_catalog():
                     LIMIT 6
                 )
 
-            SELECT p.potion_sku, p.potion_name, p.potion_quantity, p.potion_price, p.potion_type
+            SELECT DISTINCT p.potion_sku, p.potion_name, p.potion_quantity, p.potion_price, p.potion_type, priority
             FROM (
                 SELECT potion_sku, 1 AS priority FROM top_relative_proportions
                 UNION
