@@ -50,7 +50,7 @@ def get_bottle_plan():
         max_qty_day = connection.execute(sqlalchemy.text(
             "SELECT max_potions, latest_day FROM global_inventory JOIN time_info ON global_inventory.id = time_info.id ")).fetchone()
         ml_liquid = connection.execute(sqlalchemy.text(
-            "SELECT num_red_ml, num_green_ml, num_blue_ml FROM global_inventory"
+            "SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory"
         )).fetchone()
         current_qty = connection.execute(sqlalchemy.text(
             "SELECT sum(potion_quantity) FROM potion_inventory"
@@ -78,6 +78,7 @@ def get_bottle_plan():
         potions = connection.execute(sqlalchemy.text(
             "SELECT potion_type, potion_quantity FROM potion_inventory WHERE potion_sku IN :potion_sku"
         ), {"potion_sku": tuple(p[0] for p in potion_distribution if p[1] > 0.30)}).fetchall()
+        potions.append(([0,0,0,100], 0))
 
         if (len(potions) < 6):
             all_potions = connection.execute(sqlalchemy.text(
@@ -87,7 +88,7 @@ def get_bottle_plan():
                 #Append random potions
                 #Temporary: Filtering potions with dark liquid
                 #
-                potions.append(random.choice(tuple(filter(lambda p: p[0][3] == 0,all_potions))))
+                potions.append(random.choice(all_potions))
     
     qty_each = (max_qty_day[0] - current_qty) // 6
     for p in potions:
