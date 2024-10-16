@@ -35,7 +35,7 @@ def get_catalog():
                         JOIN daily_total dt ON co.day = dt.day
                         JOIN current_day cd ON co.day = cd.day
                         GROUP BY co.potion_sku, co.day, dt.daily_total
-                        HAVING ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) > 0.15
+                        HAVING ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) >= 0.15
                         ORDER BY relative_potion_probability DESC
                         LIMIT 6
                     ),
