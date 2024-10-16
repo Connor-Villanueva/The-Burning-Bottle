@@ -53,6 +53,7 @@ def get_catalog():
                 SELECT potion_sku, 2 AS priority FROM top_quantities
             ) AS combined_results
             JOIN potion_inventory p ON combined_results.potion_sku = p.potion_sku
+            WHERE p.potion_quantity > 0
             ORDER BY priority, potion_sku
             LIMIT 6
         '''
