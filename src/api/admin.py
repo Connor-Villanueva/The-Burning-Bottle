@@ -26,12 +26,6 @@ def reset():
             "UPDATE potion_inventory SET potion_quantity = 0"
         ))
         connection.execute(sqlalchemy.text(
-            "DELETE FROM customers"
-        ))
-        connection.execute(sqlalchemy.text(
-            "DELETE FROM customer_cart"
-        ))
-        connection.execute(sqlalchemy.text(
             "UPDATE time_info SET latest_day = DEFAULT, latest_hour = DEFAULT"
         ))
     return "OK"
