@@ -47,62 +47,82 @@ def get_bottle_plan():
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
-        max_qty_day = connection.execute(sqlalchemy.text(
-            "SELECT max_potions, latest_day FROM global_inventory JOIN time_info ON global_inventory.id = time_info.id ")).fetchone()
-        ml_liquid = connection.execute(sqlalchemy.text(
-            "SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml FROM global_inventory"
-        )).fetchone()
-        current_qty = connection.execute(sqlalchemy.text(
-            "SELECT sum(potion_quantity) FROM potion_inventory"
-        )).fetchone()[0]
-        #Calculates and returns relative probabilities of top 6 potions types on a given day
-        potion_distribution = connection.execute(sqlalchemy.text(
-            '''
-            WITH
-            daily_totals as (
-            SELECT day, sum(quantity) AS day_total
-            FROM completed_orders
-            GROUP BY day
-            )
-            SELECT co.potion_sku, ROUND(SUM(co.quantity)::decimal / dt.day_total, 2) as relative_potion_probability
-            FROM completed_orders co
-            JOIN daily_totals dt ON co.day = dt.day
-            WHERE co.day = :day
-            GROUP BY co.potion_sku, co.day, dt.day_total
-            ORDER BY co.day
-            LIMIT 6;
-            '''
-        ), {"day": max_qty_day[1]}).fetchall()
-
-        #Only use potions with relative probability > 30%
         potions = connection.execute(sqlalchemy.text(
-            "SELECT potion_type, potion_quantity FROM potion_inventory WHERE potion_sku IN :potion_sku"
-        ), {"potion_sku": tuple(p[0] for p in potion_distribution if p[1] > 0.30)}).fetchall()
-        potions.append(([0,0,0,100], 0))
+            """
+                WITH
+                current_day AS (
+                    SELECT latest_day as day
+                    FROM time_info
+                ),
+                daily_total AS (
+                    SELECT co.day, SUM(co.quantity) as daily_total
+                    FROM completed_orders co
+                    GROUP BY co.day
+                ),
+                top_relative_proportions AS (
+                    SELECT co.potion_sku, ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) AS relative_proportion
+                    FROM completed_orders co
+                    JOIN daily_total dt ON co.day = dt.day
+                    JOIN current_day cd ON co.day = cd.day
+                    GROUP BY co.potion_sku, co.day, dt.daily_total
+                    HAVING ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) > 0.15
+                    ORDER BY relative_proportion DESC
+                    LIMIT 6
+                ),
+                random_potions AS (
+                    SELECT potion_sku
+                    FROM potion_inventory
+                    ORDER BY random()
+                    LIMIT 10
+                ),
+                total_potions AS (
+                    SELECT potion_sku, SUM(potion_quantity) AS total
+                    FROM potion_inventory
+                    GROUP BY potion_sku
+                ),
+                potion_info AS (
+                    SELECT max_potions, num_red_ml AS red_ml, num_green_ml AS green_ml, num_blue_ml AS blue_ml, num_dark_ml AS dark_ml
+                    FROM global_inventory
+                )
+                SELECT p.potion_type, p.potion_quantity, relative_proportion
+                FROM (
+                SELECT potion_sku, relative_proportion, 1 AS priorty FROM top_relative_proportions
+                UNION
+                SELECT potion_sku, 0, 2 AS priorty FROM random_potions
+                ) AS combined_result
+                JOIN potion_inventory p ON p.potion_sku = combined_result.potion_sku
+                CROSS JOIN potion_info pi
+                ORDER BY priorty ASC
+                LIMIT 6
+            """
+        )).fetchall()
 
-        if (len(potions) < 6):
-            all_potions = connection.execute(sqlalchemy.text(
-                "SELECT potion_type, potion_quantity FROM potion_inventory WHERE potion_sku NOT IN :potion_sku"
-                ), {"potion_sku": tuple(p[0] for p in potion_distribution)}).fetchall()
-            for _ in range(6-len(potions)):
-                #Append random potions
-                #Temporary: Filtering potions with dark liquid
-                #
-                potions.append(random.choice(all_potions))
+        inventory_info = connection.execute(sqlalchemy.text(
+            """
+                SELECT 
+                max_potions, current_potions, num_red_ml, num_green_ml, num_blue_ml, num_dark_ml
+                FROM global_inventory
+                JOIN (
+                SELECT sum(potion_quantity) as current_potions
+                FROM potion_inventory
+                ) AS total ON 1=1
+            """
+        )).fetchone()
+    max_potions = inventory_info[0] - inventory_info[1]
+    liquids = [inventory_info[2], inventory_info[3], inventory_info[4], inventory_info[5]]
     
-    qty_each = (max_qty_day[0] - current_qty) // 6
+    #Each element looks like (potion_type, relative_probability)
     for p in potions:
-        max_potions = [a//b for (a,b) in zip(ml_liquid, p[0]) if b != 0]
-        max_potions = min(qty_each, min(max_potions))
+        ideal_qty = 0
+        if (p[1] > 0):
+            ideal_qty = max_potions // (p[1] * 100)
+        else:
+            ideal_qty = max_potions // len(potions)
+        print(p)
+        print(float(p[1]))
+        print(ideal_qty)
 
-        if (p[1] < max_potions):
-            bottle_plan.append(
-                {
-                    "potion_type": p[0],
-                    "quantity": max_potions - p[1]
-                }
-            )
-            ml_liquid = [a-b*(max_potions - p[1]) for (a,b) in zip(ml_liquid, p[0])]
+
     return bottle_plan
 
 if __name__ == "__main__":
