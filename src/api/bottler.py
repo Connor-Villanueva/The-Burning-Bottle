@@ -111,18 +111,25 @@ def get_bottle_plan():
     max_potions = inventory_info[0] - inventory_info[1]
     liquids = [inventory_info[2], inventory_info[3], inventory_info[4], inventory_info[5]]
     
-    #Each element looks like (potion_type, relative_probability)
+    #Each element looks like (potion_type, potion_quantity, relative_probability)
     for p in potions:
         ideal_qty = 0
-        if (p[1] > 0):
-            ideal_qty = max_potions // (p[1] * 100)
+        max_qty = [b//a for (a,b) in zip(p[0], liquids) if a != 0]
+        if (p[2] > 0):
+            ideal_qty = int(max_potions*p[2])
         else:
             ideal_qty = max_potions // len(potions)
-        print(p)
-        print(float(p[1]))
-        print(ideal_qty)
-
-
+        
+        max_qty = min(ideal_qty, min(max_qty))
+        if (max_qty > 0):
+            bottle_plan.append(
+                {
+                    "potion_type": p[0],
+                    "quantity": max_qty
+                }
+            )
+        liquids = [b - a*max_qty for (a,b) in zip(p[0],liquids)]
+ 
     return bottle_plan
 
 if __name__ == "__main__":
