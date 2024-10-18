@@ -24,37 +24,31 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
     print(f"barrels delievered: {barrels_delivered} order_id: {order_id}")
     
-    with db.engine.begin() as connection:
-        #Update gold
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = gold - :cost"),
-                           {
-                               "cost": sum(barrel.price*barrel.quantity for barrel in barrels_delivered)
-                           })
 
-        #Update ml quantities
-        for barrel in barrels_delivered:
-            if (barrel.potion_type == [1, 0, 0, 0]):
-                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = num_red_ml + :num_red_ml"), 
-                                   {
-                                       "num_red_ml": barrel.ml_per_barrel*barrel.quantity
-                                   })
-            elif (barrel.potion_type == [0, 1, 0, 0]):
-                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_green_ml = num_green_ml + :num_green_ml"), 
-                                   {
-                                       "num_green_ml": barrel.ml_per_barrel*barrel.quantity
-                                   })
-            elif (barrel.potion_type == [0, 0, 1, 0]):
-                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_blue_ml = num_blue_ml + :num_blue_ml"), 
-                                   {
-                                       "num_blue_ml": barrel.ml_per_barrel*barrel.quantity
-                                   })
-            else:
-                connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_dark_ml = num_dark_ml + :num_dark_ml"), 
-                                   {
-                                       "num_dark_ml": barrel.ml_per_barrel*barrel.quantity
-                                   })
-        
+    ml_total = get_total_ml(barrels_delivered)
+
+    with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(
+            "INSERT INTO barrel_ledger (red_ml, green_ml, blue_ml, dark_ml) VALUES (:red, :green, :blue, :dark)"
+        ),
+        {
+            'red': ml_total[0],
+            'green': ml_total[1],
+            'blue': ml_total[2],
+            'dark': ml_total[3]
+        })
+    
     return "OK"
+
+# Calculates total ml delivers of each color
+def get_total_ml(barrels: list[Barrel]):
+    total_ml = [0, 0, 0, 0]
+
+    for barrel in barrels:
+        potion_type = barrel.potion_type.index(max(barrel.potion_type))
+        total_ml[potion_type] = barrel.ml_per_barrel * barrel.quantity
+
+    return total_ml
 
 # Gets called once a day
 @router.post("/plan")

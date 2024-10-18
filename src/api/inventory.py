@@ -96,8 +96,6 @@ def get_capacity_plan():
     max_liquids = stats[4]
     stage = stats[5]
 
-    print(stats)
-
     capacity_plan = {
         "potion_capacity": 0,
         "ml_capacity": 0
