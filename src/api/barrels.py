@@ -115,9 +115,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     current_liquids = [stats[1], stats[2], stats[3], stats[4]]
     top_potion = [top_daily_potion[0], top_daily_potion[1], top_daily_potion[2], top_daily_potion[3]]
-    print(get_barrel_plan(wholesale_catalog, stats[0], current_liquids, stats[5], stats[6], top_potion))
 
-    return []
+    return get_barrel_plan(wholesale_catalog, stats[0], current_liquids, stats[5], stats[6], top_potion)
 
 def get_barrel_plan(catalog: list[Barrel], budget: int, liquids: list[int], max_ml: int, game_state: int, top_potion: list[int]):
     #   Get barrel plan based on this info

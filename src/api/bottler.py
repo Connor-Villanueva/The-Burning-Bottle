@@ -19,19 +19,29 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
-    print(f"potions delievered: {potions_delivered} order_id: {order_id}")
+    # print(f"potions delievered: {potions_delivered} order_id: {order_id}")
 
-    ml_used = [0, 0, 0, 0]  #[r, g, b, d]
+    # Formatted [red, green, blue, dark]
+    ml_used = [0, 0, 0, 0]
+    for potion in potions_delivered:
+        ml_used = [a-b*potion.quantity for (a,b) in zip(ml_used, potion.potion_type)]
 
+    potions = [{'potion_type': p.potion_type, 'quantity':p.quantity} for p in potions_delivered]
+    
     with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(
+            """
+                INSERT INTO potion_ledger
+                (potion_id, quantity)
+                SELECT id, :quantity
+                FROM potions
+                WHERE ARRAY[red, green, blue, dark] = :potion_type;
+            """
+        ), potions)
+        connection.execute(sqlalchemy.text(
+            "INSERT INTO barrel_ledger (red_ml, green_ml, blue_ml, dark_ml) VALUES (:red, :green, :blue, :dark)"
+        ), {"red": ml_used[0], "green": ml_used[1], "blue": ml_used[2], "dark": ml_used[3]})
 
-        for potion in potions_delivered:
-            ml_used = [a+(b*potion.quantity) for a,b in zip(ml_used, potion.potion_type)]
-            
-            connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET potion_quantity = potion_quantity + {potion.quantity} WHERE potion_type = :potion_type"), {'potion_type': potion.potion_type})
-        
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = num_red_ml - {ml_used[0]}, num_green_ml = num_green_ml - {ml_used[1]}, num_blue_ml = num_blue_ml - {ml_used[2]}, num_dark_ml = num_dark_ml - {ml_used[3]}"))
-     
     return "OK"
 
 @router.post("/plan")
@@ -129,21 +139,8 @@ def get_bottle_plan():
     # Each element looks like (potion_type, potion_quantity, relative_probability)
     potions = [([p[0], p[1], p[2], p[3]], p[4], p[5]) for p in potions]
     liquids = [stats[0], stats[1], stats[2], stats[3]]
-
-    potion_plan(potions, liquids, stats[4], stats[5])
-
-    # for p in potions:
-    #     if (p[2] != 0):
-    #         max_qty_each = int(max_craftable_potions * p[2])
-    #     else:
-    #         proportion = ((1-sum(x[2] for x in potions))/6)
-    #         max_qty_each = int(max_craftable_potions * proportion)
-    #     max_qty = [a//b for (a,b) in zip(liquids, p[0]) if b != 0]
-    #     max_qty = min(max_qty_each, min(max_qty))
-
-    #     print(max_qty)
         
-    return []
+    return potion_plan(potions, liquids, stats[4], stats[5])
 
 """
 Note:   potions is sorted in desc order of potion proportions
@@ -151,7 +148,6 @@ Note:   potions is sorted in desc order of potion proportions
 """
 def potion_plan(potions: list[int, float], liquids: list[int], max_potions: int, game_state: int):
     potion_plan = []
-
     
     if (game_state == 1):
         qty_each = max_potions//6
@@ -182,10 +178,34 @@ def potion_plan(potions: list[int, float], liquids: list[int], max_potions: int,
                             "quantity": qty_craftable
                         }
                     )
+                    max_potions -= qty_craftable
+                    liquids = [a-b*qty_craftable for (a,b) in zip(liquids, p[0])]
+            else:
+                qty_craftable = min(qty_craftable, max_potions//len([x for x in potions if x[2] == 0]))
 
-                
-            
-    print(potion_plan)
+                if (qty_craftable > 0):
+                    potion_plan.append(
+                        {
+                            "potion_type": p[0],
+                            "quantity": qty_craftable
+                        }
+                    )
+                    liquids = [a-b*qty_craftable for (a,b) in zip(liquids, p[0])]
+    elif (game_state == 3):
+        potions = [p for p in potions if p[2] != 0]
+
+        for p in potions:
+            qty_craftable = min([a//b for (a,b) in zip(liquids, p[0]) if b != 0])
+            qty_craftable = min(int(max_potions*p[2]), qty_craftable) - p[1]
+
+            if (qty_craftable > 0):
+                potion_plan.append(
+                    {
+                        "potion_type": p[0],
+                        "quantity": qty_craftable
+                    }
+                )
+                liquids = [a-b*qty_craftable for (a,b) in zip(liquids, p[0])]
 
     return potion_plan
 
