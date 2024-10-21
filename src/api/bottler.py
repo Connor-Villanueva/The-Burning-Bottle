@@ -72,8 +72,9 @@ def get_bottle_plan():
                 random_potions AS (
                     SELECT potion_sku
                     FROM potion_inventory
+                    WHERE potion_sku NOT IN (SELECT trp.potion_sku FROM top_relative_proportions AS trp)
                     ORDER BY random()
-                    LIMIT 10
+                    LIMIT 6
                 ),
                 total_potions AS (
                     SELECT potion_sku, SUM(potion_quantity) AS total
