@@ -28,36 +28,11 @@ def post_time(timestamp: Timestamp):
 
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(
-            "UPDATE game_info SET day = :day, hour = :hour"
-        ), {'day': timestamp.day, 'hour': timestamp.hour})
-
-        stats = connection.execute(sqlalchemy.text(
-            """
-                WITH
-                    game_status AS (
-                        SELECT game_stage
-                        FROM game_info
-                    ),
-                    liquid_capacity AS (
-                        SELECT sum(liquids)
-                        FROM capacity_ledger
-                    )
-
-                SELECT * FROM liquid_capacity
-                JOIN game_status ON 1=1
-            """
-        )).fetchone()
-        liquid_capacity = stats[0]
-        current_stage = stats[1]
-        
-        if (liquid_capacity >= 40_000 and liquid_capacity < 80_000 and current_stage != 2):
-            connection.execute(sqlalchemy.text(
-                "UPDATE game_info SET game_stage = 2"
-            ))
-        elif (liquid_capacity >= 80_000 and current_stage != 3):
-            connection.execute(sqlalchemy.text(
-                "UPDATE game_info SET game_stage = 3"
-            ))
+            "UPDATE time_info SET (latest_day, latest_hour) = (:day, :hour)"),
+        {
+            "day": timestamp.day,
+            "hour": timestamp.hour
+        })
 
     return "OK"
 
