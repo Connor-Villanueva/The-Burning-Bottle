@@ -43,52 +43,52 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-    with db.engine.begin() as connection:
-        #Fetch shop stats formatted [potions, liquids, gold]
-        stats = connection.execute(sqlalchemy.text(
-            """
-            WITH
-                total_gold as (
-                    SELECT sum(gold) as gold
-                    FROM gold_ledger
-                ),
-                total_potions as (
-                    SELECT sum(quantity) as potions
-                    FROM potion_ledger
-                ),
-                total_liquids as (
-                    SELECT sum(red_ml+green_ml+blue_ml+dark_ml) liquids
-                    FROM barrel_ledger
-                ),
-                current_capacity as (
-                    SELECT sum(potions) as max_potions, sum(liquids) as max_liquids
-                    FROM capacity_ledger
-                ),
-                game_status as (
-                    SELECT game_stage
-                    FROM game_info
-                ),
-                shop_stats as (
-                    SELECT * FROM total_potions
-                    JOIN total_liquids on 1=1
-                    JOIN total_gold on 1=1
-                    JOIN current_capacity on 1=1
-                    JOIN game_status on 1=1
-                )
+    # with db.engine.begin() as connection:
+    #     #Fetch shop stats formatted [potions, liquids, gold]
+    #     stats = connection.execute(sqlalchemy.text(
+    #         """
+    #         WITH
+    #             total_gold as (
+    #                 SELECT sum(gold) as gold
+    #                 FROM gold_ledger
+    #             ),
+    #             total_potions as (
+    #                 SELECT sum(quantity) as potions
+    #                 FROM potion_ledger
+    #             ),
+    #             total_liquids as (
+    #                 SELECT sum(red_ml+green_ml+blue_ml+dark_ml) liquids
+    #                 FROM barrel_ledger
+    #             ),
+    #             current_capacity as (
+    #                 SELECT sum(potions) as max_potions, sum(liquids) as max_liquids
+    #                 FROM capacity_ledger
+    #             ),
+    #             game_status as (
+    #                 SELECT game_stage
+    #                 FROM game_info
+    #             ),
+    #             shop_stats as (
+    #                 SELECT * FROM total_potions
+    #                 JOIN total_liquids on 1=1
+    #                 JOIN total_gold on 1=1
+    #                 JOIN current_capacity on 1=1
+    #                 JOIN game_status on 1=1
+    #             )
 
-            SELECT *
-            FROM shop_stats
-            """
-        )).fetchone()
+    #         SELECT *
+    #         FROM shop_stats
+    #         """
+    #     )).fetchone()
 
-    potions = stats[0]
-    liquids = stats[1]
-    gold = stats[2]
-    max_potions = stats[3]
-    max_liquids = stats[4]
-    stage = stats[5]
+    # potions = stats[0]
+    # liquids = stats[1]
+    # gold = stats[2]
+    # max_potions = stats[3]
+    # max_liquids = stats[4]
+    # stage = stats[5]
 
-    print(stats)
+    # print(stats)
 
     capacity_plan = {
         "potion_capacity": 0,
@@ -96,38 +96,38 @@ def get_capacity_plan():
     }
 
     #Helper function to determine proportions
-    def check_liquids(ml, max_ml):
-        if (ml/max_ml > 0.5):
-            return True
-        return False
-    def check_potions(p, max_p):
-        if (p/max_p > 0.75):
-            return True
-        return False
+    # def check_liquids(ml, max_ml):
+    #     if (ml/max_ml > 0.5):
+    #         return True
+    #     return False
+    # def check_potions(p, max_p):
+    #     if (p/max_p > 0.75):
+    #         return True
+    #     return False
     
-    #Game stages 1-3 correspond to early, mid, and late game
-    #Different strategies for each stage
-    if (stage == 1):
-        #Buy one capacity at a time
-        if (check_liquids(liquids, max_liquids) and gold > 2500):
-            capacity_plan["ml_capacity"] += 1
-            gold -= 1000
+    # #Game stages 1-3 correspond to early, mid, and late game
+    # #Different strategies for each stage
+    # if (stage == 1):
+    #     #Buy one capacity at a time
+    #     if (check_liquids(liquids, max_liquids) and gold > 2500):
+    #         capacity_plan["ml_capacity"] += 1
+    #         gold -= 1000
     
-    elif (stage == 2):
-        #Prioritize potion capacity but can buy both
-        if (check_potions(potions, max_potions) and gold > 2500):
-            capacity_plan["potion_capacity"] += 1
-            gold -= 1000
-        if (check_liquids(liquids, max_liquids) and gold > 2500):
-            capacity_plan["ml_capacity"] += 1
-            gold -= 1000
+    # elif (stage == 2):
+    #     #Prioritize potion capacity but can buy both
+    #     if (check_potions(potions, max_potions) and gold > 2500):
+    #         capacity_plan["potion_capacity"] += 1
+    #         gold -= 1000
+    #     if (check_liquids(liquids, max_liquids) and gold > 2500):
+    #         capacity_plan["ml_capacity"] += 1
+    #         gold -= 1000
     
-    elif (stage == 3):
-        #Buy up to 3
-        if ((check_liquids(liquids, max_liquids) or check_potions(potions, max_potions)) and gold > 2500):
-            max_purchaseable = min(3, gold//2000)
-            capacity_plan["potion_capacity"] = max_purchaseable
-            capacity_plan["ml_capacity"] = max_purchaseable
+    # elif (stage == 3):
+    #     #Buy up to 3
+    #     if ((check_liquids(liquids, max_liquids) or check_potions(potions, max_potions)) and gold > 2500):
+    #         max_purchaseable = min(3, gold//2000)
+    #         capacity_plan["potion_capacity"] = max_purchaseable
+    #         capacity_plan["ml_capacity"] = max_purchaseable
 
     return capacity_plan
 
