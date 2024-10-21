@@ -19,26 +19,18 @@ def get_inventory():
         stats = connection.execute(sqlalchemy.text(
             """
             WITH
-                total_gold as (
-                    SELECT sum(gold) as gold
-                    FROM gold_ledger
-                ),
                 total_potions as (
-                    SELECT sum(quantity) as potions
-                    FROM potion_ledger
+                    SELECT SUM(potion_quantity) as total_potions
+                    FROM potion_inventory
                 ),
-                total_liquids as (
-                    SELECT sum(red_ml+green_ml+blue_ml+dark_ml) liquids
-                    FROM barrel_ledger
-                ),
-                shop_stats as (
-                    SELECT * FROM total_potions
-                    JOIN total_liquids on 1=1
-                    JOIN total_gold on 1=1
+                total_ml as (
+                    SELECT SUM(num_red_ml + num_green_ml + num_blue_ml + num_dark_ml) as total_ml
+                    FROM global_inventory
                 )
-
-            SELECT *
-            FROM shop_stats
+            SELECT total_potions, total_ml, gold
+            FROM global_inventory
+            JOIN total_potions ON 1=1
+            JOIN total_ml ON 1=1
             """
         )).fetchone()
 
