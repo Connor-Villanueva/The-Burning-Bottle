@@ -114,14 +114,11 @@ def get_bottle_plan():
     
     #Each element looks like (potion_type, potion_quantity, relative_probability)
     for p in potions:
-        ideal_qty = 0
+        ideal_qty = max_potions // len(potions)
         max_qty = [b//a for (a,b) in zip(p[0], liquids) if a != 0]
-        if (p[2] > 0):
-            ideal_qty = int(max_potions*p[2])
-        else:
-            ideal_qty = max_potions // len(potions)
-        
         max_qty = min(ideal_qty, min(max_qty))
+        
+        print(f"{ideal_qty} | {max_qty}")
         if (max_qty > 0):
             bottle_plan.append(
                 {
