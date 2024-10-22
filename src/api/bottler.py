@@ -118,7 +118,6 @@ def get_bottle_plan():
         max_qty = [b//a for (a,b) in zip(p[0], liquids) if a != 0]
         max_qty = min(ideal_qty, min(max_qty))
         
-        print(f"{ideal_qty} | {max_qty}")
         if (max_qty > 0):
             bottle_plan.append(
                 {

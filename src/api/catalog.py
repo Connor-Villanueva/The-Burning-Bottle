@@ -60,15 +60,16 @@ def get_catalog():
         )).fetchall()
 
 
-        for potion in potions:                
-            catalog.append(
-                    {
-                        "sku": potion[0],
-                        "name": potion[1],
-                        "quantity": potion[2],
-                        "price": potion[3],
-                        "potion_type": potion[4]
-                    }
-                )
+    for potion in potions:                
+        catalog.append(
+                {
+                    "sku": potion[0],
+                    "name": potion[1],
+                    "quantity": potion[2],
+                    "price": potion[3],
+                    "potion_type": potion[4]
+                }
+            )
+    print(catalog)
 
     return catalog
