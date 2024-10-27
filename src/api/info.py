@@ -20,19 +20,19 @@ class Timestamp(BaseModel):
 def post_time(timestamp: Timestamp):
     """
     Share current time.
-
-    Also, want to make decision about current game state
     """
     print("Day: " + timestamp.day)
     print("Hour: " + str(timestamp.hour))
 
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(
-            "UPDATE time_info SET (latest_day, latest_hour) = (:day, :hour)"),
-        {
-            "day": timestamp.day,
-            "hour": timestamp.hour
-        })
+            """
+            UPDATE game_info
+            SET
+                day = :day,
+                hour = :hour
+            """
+        ), {"day": timestamp.day, "hour": timestamp.hour})
 
     return "OK"
 
