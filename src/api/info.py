@@ -27,12 +27,15 @@ def post_time(timestamp: Timestamp):
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(
             """
-            UPDATE game_info
-            SET
-                day = :day,
-                hour = :hour
+            INSERT INTO
+                game_info (day, hour)
+            VALUES
+                (:day, :hour)
             """
-        ), {"day": timestamp.day, "hour": timestamp.hour})
+        ), {
+            "day": timestamp.day,
+            "hour": timestamp.hour
+        })
 
     return "OK"
 

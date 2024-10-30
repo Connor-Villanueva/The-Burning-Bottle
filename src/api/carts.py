@@ -80,22 +80,7 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     print(customers)
 
-    with db.engine.begin() as connection:
-        for customer in customers:
-            customer_exist = connection.execute(sqlalchemy.text(f"SELECT customer_id FROM customers WHERE name = '{customer.customer_name}' AND class = '{customer.character_class}' AND level = {customer.level}")).fetchone()
-            
-            if (customer_exist is None):
-                customer_id = connection.execute(sqlalchemy.text("INSERT INTO customers (name, class, level) VALUES (:name, :class, :level) RETURNING customer_id"), 
-                                   {
-                                       "name": customer.customer_name,
-                                       "class": customer.character_class,
-                                       "level": customer.level
-                                   }).fetchone()[0]
-                connection.execute(sqlalchemy.text("INSERT INTO customer_cart (customer_id, cart_id) VALUES (:customer_id, :cart_id)"), 
-                                   {
-                                       "customer_id":customer_id,
-                                       "cart_id" : customer_id
-                                   })
+    
 
     return "OK"
                 
@@ -103,21 +88,9 @@ def post_visits(visit_id: int, customers: list[Customer]):
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    #Since each customer has a cart_id, delete all pre-existing carts from cart_items
-    with db.engine.begin() as connection:
-        user_id = connection.execute(sqlalchemy.text("SELECT customer_id FROM customers WHERE name = :name and class = :class and level = :level"), 
-                                     {
-                                         "name": new_cart.customer_name,
-                                         "class": new_cart.character_class,
-                                         "level": new_cart.level
-                                     }).fetchone()[0]
-        
-        connection.execute(sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"), 
-                           {
-                               "cart_id": user_id
-                           })
     
-    return {"cart_id": user_id}
+    
+    return {"cart_id": None}
 
 class CartItem(BaseModel):
     quantity: int
@@ -126,15 +99,6 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
-
-    #Insert rows into cart_items with sku and quantity
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("INSERT INTO cart_items (cart_id, potion_sku, quantity) VALUES (:cart_id, :potion_sku, :quantity)"),
-                           {
-                               "cart_id": cart_id,
-                               "potion_sku": item_sku,
-                               "quantity": cart_item.quantity
-                           })
         
     return "OK"
 
@@ -145,52 +109,5 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
-    #print(cart_checkout.payment)
 
-    profit = 0
-    potions_sold = 0
-
-    with db.engine.begin() as connection:
-        items_purchased = connection.execute(sqlalchemy.text("SELECT potion_sku, quantity FROM cart_items WHERE cart_id = :cart_id"),
-        {
-            "cart_id": cart_id
-        }).fetchall()
-        
-        profit = 0
-        potions_sold = sum(p[1] for p in items_purchased)
-
-        timestamp = connection.execute(sqlalchemy.text("SELECT latest_day, latest_hour FROM time_info")).fetchone()
-
-        for item in items_purchased:
-            price = connection.execute(sqlalchemy.text("SELECT potion_price FROM potion_inventory WHERE potion_sku = :potion_sku"),
-            {
-                "potion_sku": item[0]
-            }).fetchone()[0]
-
-            #profit += price * quantity
-            profit += price * item[1]
-
-            connection.execute(sqlalchemy.text("UPDATE potion_inventory SET potion_quantity = potion_quantity - :potion_qty WHERE potion_sku = :potion_sku"),
-            {
-                "potion_qty": item[1],
-                "potion_sku": item[0]
-            })
-
-            #Update completed orders for tracking purposes
-            connection.execute(sqlalchemy.text("INSERT INTO completed_orders (customer_id, potion_sku, quantity, day, hour) VALUES (:cart_id, :potion_sku, :quantity, :day, :hour)"),
-                               {
-                                   "cart_id": cart_id,
-                                   "potion_sku": item[0],
-                                   "quantity": item[1],
-                                   "day":timestamp[0],
-                                   "hour":timestamp[1]
-                               })
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET gold = gold + :profit"),
-        {
-            "profit":profit
-        })
-
-
-
-
-    return {"total_potions_bought": potions_sold, "total_gold_paid": profit}
+    return {"total_potions_bought": None, "total_gold_paid": None}
