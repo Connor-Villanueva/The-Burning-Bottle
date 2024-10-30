@@ -170,14 +170,14 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             #profit += price * quantity
             profit += price * item[1]
 
-            connection.execute(sqlalchemy.text("UPDATE potion_inventory SET potion_quantity = potion_quantity - :potion_qty WHERE potion_sku = :potion_sku"),
-            {
-                "potion_qty": item[1],
-                "potion_sku": item[0]
-            })
+            # connection.execute(sqlalchemy.text("UPDATE potion_inventory SET potion_quantity = potion_quantity - :potion_qty WHERE potion_sku = :potion_sku"),
+            # {
+            #     "potion_qty": item[1],
+            #     "potion_sku": item[0]
+            # })
 
             #Update completed orders for tracking purposes
-            connection.execute(sqlalchemy.text("INSERT INTO completed_orders (customer_id, potion_sku, quantity, day, hour) VALUES (:cart_id, :potion_sku, :quantity, :day, :hour)"),
+            connection.execute(sqlalchemy.text("INSERT INTO potion_sale_data (customer_id, potion_sku, quantity, day, hour) VALUES (:cart_id, :potion_sku, :quantity, :day, :hour)"),
                                {
                                    "cart_id": cart_id,
                                    "potion_sku": item[0],
@@ -185,10 +185,10 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                                    "day":timestamp[0],
                                    "hour":timestamp[1]
                                })
-        connection.execute(sqlalchemy.text("UPDATE global_inventory SET gold = gold + :profit"),
-        {
-            "profit":profit
-        })
+        # connection.execute(sqlalchemy.text("UPDATE global_inventory SET gold = gold + :profit"),
+        # {
+        #     "profit":profit
+        # })
 
 
 
