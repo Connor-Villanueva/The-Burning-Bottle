@@ -73,16 +73,17 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 SELECT 
                     gold, current_ml, max_ml 
                 FROM barrel_purchase_stats
-                """)).mappings().fetchone()
+                """)).first()
             # Put a sql query for the top potion of one color
-            top_single_potion = connection.execute(sqlalchemy.text())
+            #top_single_potion = connection.execute(sqlalchemy.text())
+            top_single_potion = [100,0,0,0]
     except Exception:
         print("Error fetching purchase_stats!")
         return []
     
-    gold = purchase_stats["gold"]
-    ml_inventory = purchase_stats["current_ml"]
-    ml_max = purchase_stats["max_ml"]
+    gold = purchase_stats.gold
+    ml_inventory = purchase_stats.current_ml
+    ml_max = purchase_stats.max_ml
     top_single_potion = [color/100 for color in top_single_potion]
     
     return get_barrel_plan(gold, ml_inventory, ml_max, wholesale_catalog, top_single_potion)
@@ -136,16 +137,12 @@ def get_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: list
         small_barrels = list(filter(lambda b:b.ml_per_barrel == 500, catalog))
 
         for type, ml_needed in zip(barrel_types, ml_needed_each):
-            # Change 0.2 to be an adjustable constant in db
-            print("---------New iteration-----------")
-            print(f"{type} | {ml_needed}")
-            #print(list(big_barrels))
             if (big_barrels is not None):
                 for barrel in big_barrels:
-                    print(f"{barrel.sku} | {ml_needed/(max_ml)/4}")
+                    
+                    # Change 0.2 to be an adjustable constant in db
                     if (barrel.potion_type == type and ml_needed/(max_ml/4) > 0.2):
                         max_qty = ml_needed // barrel.ml_per_barrel
-                        print(f"{max_qty} | {budget//barrel.price} | {barrel.quantity}")
                         max_qty = min(max_qty, budget//barrel.price, barrel.quantity)                        
 
                         if (budget > 0 and max_qty > 0):

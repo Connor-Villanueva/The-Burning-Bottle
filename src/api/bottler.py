@@ -84,7 +84,7 @@ def get_bottle_plan():
                 SELECT ml, max_potions, current_potions
                 FROM potion_purchase_stats
                 """
-            )).mappings().fetchall()
+            )).first()
 
             # Get top selling potions based on order data
             top_potions = connection.execute(sqlalchemy.text(
@@ -92,12 +92,14 @@ def get_bottle_plan():
                 """
             ))
 
-        current_ml = stats["ml"]
-        max_potions = stats["max_potions"]
-        current_potions = stats["current_potions"]
-        potion_plan = flood_fill_potions(top_potions, max_potions-current_potions, current_ml)
+        
     except Exception:
         print("Error occured while fetching data")
+    
+    current_ml = stats.ml
+    max_potions = stats.max_potions
+    current_potions = stats.current_potions
+    potion_plan = flood_fill_potions(top_potions, max_potions-current_potions, current_ml)
     
     print(f"Potion Plan: {potion_plan}")
     return potion_plan
