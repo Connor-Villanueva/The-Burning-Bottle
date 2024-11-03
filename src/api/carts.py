@@ -78,17 +78,90 @@ def post_visits(visit_id: int, customers: list[Customer]):
     """
     Which customers visited the shop today?
     """
-    print(customers)
+    print(f"Customer visits: {customers}\n")
 
+    class_visits = {
+        "Barbarian": 0,
+        "Bard": 0,
+        "Cleric": 0,
+        "Druid": 0,
+        "Fighter": 0,
+        "Monk": 0,
+        "Paladin": 0,
+        "Ranger": 0,
+        "Rogue": 0,
+        "Warlock": 0,
+        "Wizard": 0
+    }
+
+    for customer in customers:
+        class_visits[customer.character_class] += 1
     
-
+    # Keep track of the number of visitors per tick
+    with db.engine.begin() as connection:
+        parameters = class_visits
+        parameters.update({"visit_id": visit_id})
+        connection.execute(sqlalchemy.text(
+            """
+            INSERT INTO
+                visits 
+            (
+               SELECT 
+                    id,
+                    :visit_id,
+                    :Barbarian, 
+                    :Bard, 
+                    :Cleric,
+                    :Druid,
+                    :Fighter,
+                    :Monk,
+                    :Paladin,
+                    :Ranger,
+                    :Rogue,
+                    :Warlock,
+                    :Wizard
+                FROM current_day
+                )
+            """
+        ), parameters)
+    print(class_visits)
     return "OK"
                 
 
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    
+    # 1. Add customer to customers table if not already
+    # 2. Assign customer a cart
+    # 3. Reuse cart
+    with db.engine.begin() as connection:
+        result = connection.execute(sqlalchemy.text(
+            """
+            SELECT check_customer_exists(:name, :class, :level) as verified
+            """
+        ), {
+            "name": new_cart.customer_name,
+            "class": new_cart.character_class,
+            "level": new_cart.level
+        }).one()
+
+        if (result.verified):
+            cart_id = connection.execute(sqlalchemy.text(
+                """
+                """
+            ))
+        else:
+            cart_id = connection.execute(sqlalchemy.text(
+                """
+                BEGIN
+
+                INSERT INTO
+                    customers_to_carts
+                    (
+                        SELECT 
+                    )
+                """
+            ))
     
     return {"cart_id": None}
 

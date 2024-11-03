@@ -26,10 +26,10 @@ def get_catalog():
                 ORDER BY id DESC
                 LIMIT 1
                 """
-            )).mappings().fetchone()
+            )).one()
         # At end of day, sell all stock that has no impact on next day
         # Implement this future me!
-        if (time_stats["hour"] >= 20 or time_stats["hour"] == 0):
+        if (time_stats.hour >= 20 or time_stats.hour == 0):
             for potion in potions:
                 catalog.append(
                     {
