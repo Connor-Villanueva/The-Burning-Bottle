@@ -226,27 +226,43 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         ), {"cart_id": cart_id})
 
         gold = 0
-        potions_purchased = []
-        for item in items_purchased:
-            gold += item.price * item.quantity
-            potions_purchased.extend([{"potion_id": item.potion_id, "quantity": item.quantity}])
+        potions_sold = 0
         
-        parameters = potions_purchased
-        connection.exceute(sqlalchemy.text(
-            """
-            BEGIN
-                INSERT INTO
-                    gold_ledger (transaction_type, transaction_id, gold)
-                VALUES
-                    ('Potions Sold', :cart_id, :gold);
-                
+        # Assuming a single customer can buy multiple potion types, checkout each potion
+        # Also add their order to completed orders
+        # On average, only executes once per customer
+        for item in items_purchased:
+            connection.execute(sqlalchemy.text(
+                """
                 INSERT INTO
                     potion_ledger (transaction_type, potion_id, quantity)
                 VALUES
-                    ('Potions Sold', :potion_id, :quantity);
-            END;
+                    ('Potions Sold', :potion_id, -:quantity)
+                """
+            ), {"potion_id": item.potion_id, "quantity": item.quantity})
+            gold += item.price * item.quantity
+            potions_sold += item.quantity
+
+            connection.execute(sqlalchemy.text(
+                """
+                INSERT INTO
+                    completed_orders (customer_id, potion_id, quantity, time_id, cost)
+                    (
+                        SELECT customer_id, :potion_id, :quantity, current_day.id, :cost
+                        FROM customers_to_carts
+                        JOIN current_day ON 1=1
+                        WHERE cart_id = :cart_id
+                    )
+                """
+            ), {"potion_id": item.potion_id, "quantity": item.quantity, "cart_id": cart_id, "cost": item.price * item.quantity})
+        
+        connection.execute(sqlalchemy.text(
             """
-        ),)
+            INSERT INTO
+                gold_ledger (transaction_type, transaction_id, gold)
+            VALUES
+                ('Potions Sold', :cart_id, :gold)
+            """
+        ), {"cart_id": cart_id, "gold": gold})
 
-
-    return {"total_potions_bought": None, "total_gold_paid": None}
+    return {"total_potions_bought": potions_sold, "total_gold_paid": gold}

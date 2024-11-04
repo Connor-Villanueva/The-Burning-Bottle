@@ -4,7 +4,6 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 
-import random
 
 router = APIRouter(
     prefix="/info",

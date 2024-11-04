@@ -73,13 +73,16 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             purchase_stats = connection.execute(sqlalchemy.text(
                 """
                 SELECT 
-                    gold, current_ml, max_ml 
+                    gold, current_ml, max_ml
                 FROM barrel_purchase_stats
                 """)).one()
             
-            # Put a sql query for the top potion of one color
-            #top_single_potion = connection.execute(sqlalchemy.text())
-            top_single_potion = [100,0,0,0]
+            starter_potion = connection.execute(sqlalchemy.text(
+                """
+                SELECT starter_potion
+                FROM barrel_constants
+                """
+            )).one()
     except Exception:
         print("Error fetching purchase_stats!")
         return []
@@ -87,13 +90,13 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     gold = purchase_stats.gold
     ml_inventory = purchase_stats.current_ml
     ml_max = purchase_stats.max_ml
-    top_single_potion = [color/100 for color in top_single_potion]
+    starter_potion = [color/100 for color in starter_potion.starter_potion]
 
-    barrel_plan = get_barrel_plan(gold, ml_inventory, ml_max, wholesale_catalog, top_single_potion)
+    barrel_plan = get_barrel_plan(gold, ml_inventory, ml_max, wholesale_catalog, starter_potion)
     print(f"Barrel Plan: {barrel_plan}\n")
     return barrel_plan
 
-def get_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: list[Barrel], top_potion: list[int]):
+def get_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: list[Barrel], starter_potion: list[int]):
     # Please future me, make this look nicer. It's literally the same logic each time...
     
     with db.engine.begin() as connection:
@@ -117,15 +120,14 @@ def get_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: list
     catalog = sorted(filter(lambda b: b.ml_per_barrel >= 500, catalog), key = lambda b: (b.ml_per_barrel, b.potion_type), reverse=True)
 
     if (max_ml < 40_000):
-        
         #If we're broke (early game) buy barrel that corresponds to best selling single color potion of the day
         if (gold < broke_value):
-            min_barrel = min(filter(lambda b:b.ml_per_barrel == 500 and b.potion_type == top_potion, catalog), key = lambda b: b.price)
-            if (min_barrel.price <= budget):
+            min_barrel = min(filter(lambda b:b.ml_per_barrel == 500 and b.potion_type == starter_potion, catalog), key = lambda b: b.price)
+            if (min_barrel.price <= gold):
                 barrel_plan.append(
                 {
                     "sku": min_barrel.sku,
-                    "quantity": budget // min_barrel.price
+                    "quantity": gold // min_barrel.price
                 })
         else:
             budget = int(budget_multiplier*gold)
