@@ -133,9 +133,8 @@ def create_cart(new_cart: Customer):
     """ """
     # 1. Add customer to customers table if not already
     # 2. Assign customer a cart
-    # 3. Reuse cart
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text(
+        customer = connection.execute(sqlalchemy.text(
             """
             SELECT check_customer_exists(:name, :class, :level) as verified
             """
@@ -145,25 +144,39 @@ def create_cart(new_cart: Customer):
             "level": new_cart.level
         }).one()
 
-        if (result.verified):
-            cart_id = connection.execute(sqlalchemy.text(
+        if (not customer.verified):
+            connection.execute(sqlalchemy.text(
                 """
-                """
-            ))
-        else:
-            cart_id = connection.execute(sqlalchemy.text(
-                """
-                BEGIN
-
                 INSERT INTO
-                    customers_to_carts
-                    (
-                        SELECT 
-                    )
+                    customers (name, class, level)
+                VALUES
+                    (:name, :class, :level)
                 """
-            ))
+            ), {
+                "name": new_cart.customer_name,
+                "class": new_cart.character_class,
+                "level": new_cart.level
+            })
+        
+        cart_id = connection.execute(sqlalchemy.text(
+            """
+            INSERT INTO
+                customers_to_carts (customer_id)
+                (
+                    SELECT id
+                    FROM customers
+                    WHERE name = :name and class = :class and level = :level
+                )
+            RETURNING cart_id
+            """
+        ),{
+            "name": new_cart.customer_name,
+            "class": new_cart.character_class,
+            "level": new_cart.level
+        }).one()
+        
     
-    return {"cart_id": None}
+    return {"cart_id": cart_id.cart_id}
 
 class CartItem(BaseModel):
     quantity: int
@@ -172,6 +185,22 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
+    with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(
+            """
+            INSERT INTO
+                cart_items (cart_id, potion_id, quantity)
+                (
+                    SELECT :cart_id, id, :quantity
+                    FROM potions
+                    WHERE potions.sku = :item_sku
+                )
+            """
+        ), {
+            "cart_id": cart_id,
+            "item_sku": item_sku,
+            "quantity": cart_item.quantity
+        })
         
     return "OK"
 
@@ -182,5 +211,42 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
+    with db.engine.begin() as connection:
+        items_purchased = connection.execute(sqlalchemy.text(
+            """
+            SELECT
+                potion_id, quantity, price
+            FROM
+                cart_items
+            JOIN
+                potions on potion_id = potions.id
+            WHERE
+                cart_id = :cart_id
+            """
+        ), {"cart_id": cart_id})
+
+        gold = 0
+        potions_purchased = []
+        for item in items_purchased:
+            gold += item.price * item.quantity
+            potions_purchased.extend([{"potion_id": item.potion_id, "quantity": item.quantity}])
+        
+        parameters = potions_purchased
+        connection.exceute(sqlalchemy.text(
+            """
+            BEGIN
+                INSERT INTO
+                    gold_ledger (transaction_type, transaction_id, gold)
+                VALUES
+                    ('Potions Sold', :cart_id, :gold);
+                
+                INSERT INTO
+                    potion_ledger (transaction_type, potion_id, quantity)
+                VALUES
+                    ('Potions Sold', :potion_id, :quantity);
+            END;
+            """
+        ),)
+
 
     return {"total_potions_bought": None, "total_gold_paid": None}
