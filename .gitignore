@@ -7,3 +7,4 @@ info.log
 db.log
 api-order.log
 bottler_tests.py
+count_customers.py
