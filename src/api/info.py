@@ -4,7 +4,6 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 
-import random
 
 router = APIRouter(
     prefix="/info",
@@ -20,16 +19,19 @@ class Timestamp(BaseModel):
 def post_time(timestamp: Timestamp):
     """
     Share current time.
-
-    Also, want to make decision about current game state
     """
     print("Day: " + timestamp.day)
     print("Hour: " + str(timestamp.hour))
 
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(
-            "UPDATE time_info SET (latest_day, latest_hour) = (:day, :hour)"),
-        {
+            """
+            INSERT INTO
+                game_info (day, hour)
+            VALUES
+                (:day, :hour)
+            """
+        ), {
             "day": timestamp.day,
             "hour": timestamp.hour
         })

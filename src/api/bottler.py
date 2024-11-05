@@ -3,8 +3,8 @@ from enum import Enum
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
+from sqlalchemy.exc import IntegrityError
 from src import database as db
-import random
 
 router = APIRouter(
     prefix="/bottler",
@@ -18,20 +18,61 @@ class PotionInventory(BaseModel):
 
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
-    """ """
+    """
+    Inserts into potion ledger each potion and their quantity
+    Inserts into barrel ledger the cost to make the potions 
+    """
     print(f"potions delievered: {potions_delivered} order_id: {order_id}")
+    ml_cost = {
+        "red": 0,
+        "green": 0,
+        "blue": 0,
+        "dark": 0
+    }
+    
+    for p in potions_delivered:
+        for key, value in zip(ml_cost.keys(), p.potion_type):
+            ml_cost[key] += -1*value*p.quantity
+    barrel_parameters = ml_cost
+    barrel_parameters.update({"order_id": order_id})
+    try:
+        with db.engine.begin() as connection:
+            # Good to go
+            connection.execute(sqlalchemy.text(
+                """
+                INSERT INTO
+                    barrel_ledger (id, transaction_type, red, green, blue, dark)
+                VALUES
+                    (:order_id, 'Potions Bottled', :red, :green, :blue, :dark)
+                """
+            ), barrel_parameters)
 
-    ml_used = [0, 0, 0, 0]  #[r, g, b, d]
-
-    with db.engine.begin() as connection:
-
-        for potion in potions_delivered:
-            ml_used = [a+(b*potion.quantity) for a,b in zip(ml_used, potion.potion_type)]
-            
-            connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET potion_quantity = potion_quantity + {potion.quantity} WHERE potion_type = :potion_type"), {'potion_type': potion.potion_type})
-        
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = num_red_ml - {ml_used[0]}, num_green_ml = num_green_ml - {ml_used[1]}, num_blue_ml = num_blue_ml - {ml_used[2]}, num_dark_ml = num_dark_ml - {ml_used[3]}"))
-     
+            # Insert potions into potion_ledger
+            # I hate this, but its fine for now
+            for p in potions_delivered:
+                connection.execute(sqlalchemy.text(
+                    """
+                    INSERT INTO
+                        potion_ledger (id, transaction_type, potion_id, quantity)
+                        (
+                            SELECT 
+                                :order_id, 'Potions Bottled', potions.id, :quantity
+                            FROM 
+                                potions 
+                            WHERE 
+                                ARRAY[red,green,blue,dark] = :potion_type
+                        )
+                    """
+                ), 
+                {
+                    "potion_type": p.potion_type,
+                    "quantity": p.quantity,
+                    "order_id": order_id
+                })
+    except IntegrityError as e:
+        print("Error:", e)
+        print("Order already delivered")
+    
     return "OK"
 
 @router.post("/plan")
@@ -40,93 +81,91 @@ def get_bottle_plan():
     Go from barrel to bottle.
     """
 
+    potion_plan = []
+    try:
+        with db.engine.begin() as connection:
+            stats = connection.execute(sqlalchemy.text(
+                """
+                SELECT ml, max_potions, current_potions
+                FROM potion_purchase_stats
+                """
+            )).first()
+
+            # Get top selling potions based on order data
+            top_potions = connection.execute(sqlalchemy.text(
+                """
+                SELECT sku, name, potion_type, weight
+                FROM potion_plan
+                """
+            ))
+
+            starter_potion = connection.execute(sqlalchemy.text(
+                """
+                SELECT starter_potion
+                FROM barrel_constants
+                """
+            )).one()
+            
+        current_ml = stats.ml
+        max_potions = stats.max_potions
+        current_potions = stats.current_potions
+        top_potions = [p._asdict() for p in top_potions]
+        print(top_potions)
+        potion_plan = flood_fill_potions(top_potions, starter_potion.starter_potion, max_potions-current_potions, current_ml)
+
+
+    except Exception:
+        print("Error occured while fetching data")
+    
+    print(f"Potion Plan: {potion_plan}")
+    return potion_plan
+
+def flood_fill_potions(potions, starter_potion, capacity, ml):
+    '''
+    potions = {potion_sku, potion_name, potion_type, weight}
+    capacity = max_potions - current_sum_potions
+    ml = [red, green, blue, dark]
+
+    Only bottle top selling potions according
+    Attempt to bottle according to weight 
+    '''
     bottle_plan = []
 
-    # Each bottle has a quantity of what proportion of red, blue, and
-    # green potion to add.
-    # Expressed in integers from 1 to 100 that must sum up to 100.
+    total_weight = sum(p['weight']for p in potions)
+    remaning_capacity = capacity
+    if (total_weight > 0):
+        for potion in potions:
+            proportion = potion['weight']/ total_weight
+            
+            max_potions_ml = min([b//p for (b,p) in zip(ml, potion['potion_type']) if not p == 0])
+            max_potions_weight = int(capacity * proportion) if int(capacity * proportion) > 0 else 5
+            assigned_quantity = min(max_potions_ml, max_potions_weight, remaning_capacity)
+            
+            print(f"Trying to assign: {assigned_quantity}")
+            if (assigned_quantity > 0):
+                bottle_plan.append({
+                    "potion_type": potion['potion_type'],
+                    "quantity": assigned_quantity
+                })
+            ml = [b-p*assigned_quantity for (b,p) in zip(ml, potion['potion_type'])]
 
-    with db.engine.begin() as connection:
-        potions = connection.execute(sqlalchemy.text(
-            """
-                WITH
-                current_day AS (
-                    SELECT latest_day as day
-                    FROM time_info
-                ),
-                daily_total AS (
-                    SELECT co.day, SUM(co.quantity) as daily_total
-                    FROM completed_orders co
-                    GROUP BY co.day
-                ),
-                top_relative_proportions AS (
-                    SELECT co.potion_sku, ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) AS relative_proportion
-                    FROM completed_orders co
-                    JOIN daily_total dt ON co.day = dt.day
-                    JOIN current_day cd ON co.day = cd.day
-                    GROUP BY co.potion_sku, co.day, dt.daily_total
-                    HAVING ROUND(SUM(co.quantity)::decimal / dt.daily_total, 2) > 0.15
-                    ORDER BY relative_proportion DESC
-                    LIMIT 6
-                ),
-                random_potions AS (
-                    SELECT potion_sku
-                    FROM potion_inventory
-                    WHERE potion_sku NOT IN (SELECT trp.potion_sku FROM top_relative_proportions AS trp)
-                    ORDER BY random()
-                    LIMIT 6
-                ),
-                total_potions AS (
-                    SELECT potion_sku, SUM(potion_quantity) AS total
-                    FROM potion_inventory
-                    GROUP BY potion_sku
-                ),
-                potion_info AS (
-                    SELECT max_potions, num_red_ml AS red_ml, num_green_ml AS green_ml, num_blue_ml AS blue_ml, num_dark_ml AS dark_ml
-                    FROM global_inventory
-                )
-                SELECT p.potion_type, p.potion_quantity, relative_proportion
-                FROM (
-                SELECT potion_sku, relative_proportion, 1 AS priorty FROM top_relative_proportions
-                UNION
-                SELECT potion_sku, 0, 2 AS priorty FROM random_potions
-                ) AS combined_result
-                JOIN potion_inventory p ON p.potion_sku = combined_result.potion_sku
-                CROSS JOIN potion_info pi
-                ORDER BY priorty ASC
-                LIMIT 6
-            """
-        )).fetchall()
-
-        inventory_info = connection.execute(sqlalchemy.text(
-            """
-                SELECT 
-                max_potions, current_potions, num_red_ml, num_green_ml, num_blue_ml, num_dark_ml
-                FROM global_inventory
-                JOIN (
-                SELECT sum(potion_quantity) as current_potions
-                FROM potion_inventory
-                ) AS total ON 1=1
-            """
-        )).fetchone()
-    max_potions = inventory_info[0] - inventory_info[1]
-    liquids = [inventory_info[2], inventory_info[3], inventory_info[4], inventory_info[5]]
+            if (remaning_capacity <= 0):
+                break
     
-    #Each element looks like (potion_type, potion_quantity, relative_probability)
-    for p in potions:
-        ideal_qty = max_potions // len(potions)
-        max_qty = [b//a for (a,b) in zip(p[0], liquids) if a != 0]
-        max_qty = min(ideal_qty, min(max_qty))
+    # If we make it here, and the bottle plan is empty then either:
+    # 1. Capacity is full
+    # 2. Start of the game
+    if (not bottle_plan):
+        print("bottle plan was empty")
+        max_potions_ml = min([b//p for (b,p) in zip(ml, starter_potion) if not p == 0])
+        assigned_quantity = min(max_potions_ml, remaning_capacity)
+
+        if (assigned_quantity > 0):
+            bottle_plan.append({
+                "potion_type": starter_potion,
+                "quantity": assigned_quantity
+            })
         
-        if (max_qty > 0):
-            bottle_plan.append(
-                {
-                    "potion_type": p[0],
-                    "quantity": max_qty
-                }
-            )
-        liquids = [b - a*max_qty for (a,b) in zip(p[0],liquids)]
- 
     return bottle_plan
 
 if __name__ == "__main__":
