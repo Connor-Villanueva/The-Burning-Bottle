@@ -5,6 +5,7 @@ __pycache__
 .env
 info.log
 db.log
+barrel.log
 api-order.log
 bottler_tests.py
 count_customers.py

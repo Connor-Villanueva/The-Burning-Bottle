@@ -99,31 +99,16 @@ def post_visits(visit_id: int, customers: list[Customer]):
     
     # Keep track of the number of visitors per tick
     with db.engine.begin() as connection:
-        parameters = class_visits
-        parameters.update({"visit_id": visit_id})
         connection.execute(sqlalchemy.text(
             """
-            INSERT INTO
-                visits 
-            (
-               SELECT 
-                    id,
-                    :visit_id,
-                    :Barbarian, 
-                    :Bard, 
-                    :Cleric,
-                    :Druid,
-                    :Fighter,
-                    :Monk,
-                    :Paladin,
-                    :Ranger,
-                    :Rogue,
-                    :Warlock,
-                    :Wizard
-                FROM current_day
-                )
+            UPDATE
+                ticks
+            SET 
+                visits = :visits
+            WHERE
+                id = (SELECT id FROM current_tick)
             """
-        ), parameters)
+        ), {"visits": [int(i) for i in class_visits.values()]})
     print(class_visits)
     return "OK"
                 
@@ -161,7 +146,7 @@ def create_cart(new_cart: Customer):
         cart_id = connection.execute(sqlalchemy.text(
             """
             INSERT INTO
-                customers_to_carts (customer_id)
+                customer_to_carts (customer_id)
                 (
                     SELECT id
                     FROM customers
@@ -189,12 +174,9 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
         connection.execute(sqlalchemy.text(
             """
             INSERT INTO
-                cart_items (cart_id, potion_id, quantity)
-                (
-                    SELECT :cart_id, id, :quantity
-                    FROM potions
-                    WHERE potions.sku = :item_sku
-                )
+                cart_items (id, potion_sku, quantity)
+            VALUES
+                (:cart_id, :item_sku, :quantity)
             """
         ), {
             "cart_id": cart_id,
@@ -215,13 +197,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         items_purchased = connection.execute(sqlalchemy.text(
             """
             SELECT
-                potion_id, quantity, price
+                potion_sku, quantity, price
             FROM
                 cart_items
             JOIN
-                potions on potion_id = potions.id
+                potions on potion_sku = potions.sku
             WHERE
-                cart_id = :cart_id
+                id = :cart_id
             """
         ), {"cart_id": cart_id})
 
@@ -232,37 +214,37 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         # Also add their order to completed orders
         # On average, only executes once per customer
         for item in items_purchased:
+            order_id = connection.execute(sqlalchemy.text(
+                """
+                INSERT INTO
+                    completed_orders (customer_id, potion_sku, quantity, tick, cost)
+                    (
+                        SELECT customer_id, :potion_sku, :quantity, current_tick.id, :cost
+                        FROM customer_to_carts
+                        JOIN current_tick ON 1=1
+                        WHERE cart_id = :cart_id
+                    )
+                RETURNING id
+                """
+            ), {"potion_sku": item.potion_sku, "quantity": item.quantity, "cart_id": cart_id, "cost": item.price * item.quantity}).one()
             connection.execute(sqlalchemy.text(
                 """
                 INSERT INTO
-                    potion_ledger (transaction_type, potion_id, quantity)
+                    potion_ledger (transaction_type, transaction_id, potion_sku, quantity)
                 VALUES
-                    ('Potions Sold', :potion_id, -:quantity)
+                    ('sold', :order_id, :potion_sku, -:quantity)
                 """
-            ), {"potion_id": item.potion_id, "quantity": item.quantity})
+            ), {"order_id": order_id.id, "potion_sku": item.potion_sku, "quantity": item.quantity})
             gold += item.price * item.quantity
             potions_sold += item.quantity
 
-            connection.execute(sqlalchemy.text(
-                """
-                INSERT INTO
-                    completed_orders (customer_id, potion_id, quantity, time_id, cost)
-                    (
-                        SELECT customer_id, :potion_id, :quantity, current_day.id, :cost
-                        FROM customers_to_carts
-                        JOIN current_day ON 1=1
-                        WHERE cart_id = :cart_id
-                    )
-                """
-            ), {"potion_id": item.potion_id, "quantity": item.quantity, "cart_id": cart_id, "cost": item.price * item.quantity})
-        
         connection.execute(sqlalchemy.text(
             """
             INSERT INTO
                 gold_ledger (transaction_type, transaction_id, gold)
             VALUES
-                ('Potions Sold', :cart_id, :gold)
+                ('potion', :order_id, :gold)
             """
-        ), {"cart_id": cart_id, "gold": gold})
+        ), {"order_id": order_id.id, "gold": gold})
 
     return {"total_potions_bought": potions_sold, "total_gold_paid": gold}

@@ -27,7 +27,7 @@ def post_time(timestamp: Timestamp):
         connection.execute(sqlalchemy.text(
             """
             INSERT INTO
-                game_info (day, hour)
+                ticks (day, hour)
             VALUES
                 (:day, :hour)
             """

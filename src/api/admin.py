@@ -17,8 +17,12 @@ def reset():
     inventory, and all barrels are removed from inventory. Carts are all reset.
     """
 
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("SELECT reset_shop()"))
+    try:
+        with db.engine.begin() as connection:
+            connection.execute(sqlalchemy.text("SELECT reset_shop()"))
+
+    except Exception:
+        print("Error resetting shop.")
     
     return "OK"
 

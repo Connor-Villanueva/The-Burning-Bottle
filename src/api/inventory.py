@@ -18,23 +18,14 @@ def get_inventory():
     with db.engine.begin() as connection:
         stats = connection.execute(sqlalchemy.text(
             """
-            WITH
-                total_potions as (
-                    SELECT SUM(potion_quantity) as total_potions
-                    FROM potion_inventory
-                ),
-                total_ml as (
-                    SELECT SUM(num_red_ml + num_green_ml + num_blue_ml + num_dark_ml) as total_ml
-                    FROM global_inventory
-                )
-            SELECT total_potions, total_ml, gold
-            FROM global_inventory
-            JOIN total_potions ON 1=1
-            JOIN total_ml ON 1=1
+            SELECT
+                total_potions, total_ml, total_gold
+            FROM
+                inventory_stats
             """
-        )).fetchone()
+        )).one()
 
-    return {"number_of_potions": stats[0], "ml_in_barrels": stats[1], "gold": stats[2]}
+    return {"number_of_potions": stats.total_potions, "ml_in_barrels": stats.total_ml, "gold": stats.total_gold}
 
 # Gets called once a day
 @router.post("/plan")
@@ -43,51 +34,42 @@ def get_capacity_plan():
     Start with 1 capacity for 50 potions and 1 capacity for 10000 ml of potion. Each additional 
     capacity unit costs 1000 gold.
     """
-    
+    capacity_plan = {"potion_capacity": 0, "ml_capacity": 0}
     try:
-        capacity_plan = {
-        "potion_capacity": 0,
-        "ml_capacity": 0
-        }
-        
         with db.engine.begin() as connection:
             stats = connection.execute(sqlalchemy.text(
                 """
-                SELECT gold, current_potions, current_ml, max_potions, max_ml
-                FROM shop_stats
+                SELECT
+                    current_potions, current_ml, gold, potion_capacity, ml_capacity
+                FROM
+                    capacity_stats
                 """
-            )).mappings().fetchone()
-        
-        gold = stats['gold']
-        current_potions = stats['current_potions']
-        current_ml = stats['current_ml']
-        max_potions = stats['max_potions']
-        max_ml = stats['max_ml']
+            )).one()
 
-        return fill_capacity_plan(gold, current_potions, current_ml, max_potions, max_ml)
+            constants = connection.execute(sqlalchemy.text(
+                """
+                SELECT
+                    max_potion_capacity, max_ml_capacity, budget_multiplier
+                FROM
+                    capacity_constants
+                """
+            )).one()
 
-    except Exception:
-        print("Error")
-        return {
-            "potion_capacity": 0,
-            "ml_capacity": 0
-        }
+    except Exception as e:
+        print("Error getting capacity plan.")
+        print(capacity_plan)
+        return capacity_plan
 
-def fill_capacity_plan(gold: int, current_potions: int, current_ml: int, max_potions: int, max_ml: int):
-    '''
-    Always purchase at 2:1 ratio of potion:ml -> 3000 gold
-    This needs work, I dont like it
-    '''
-    capacity_plan = {"potion_capacity": 0, "ml_capacity": 0}
-    budget = gold if gold < 30_000 else 0.1 * int(gold)
+    budget = int(stats.gold * constants.budget_multiplier)
+    max_potions = min(int(budget/2000), constants.max_potion_capacity)
+    max_ml = min(int(budget/2000), constants.max_ml_capacity)
 
-    while budget > 0:
-        if ((current_potions/max_potions >= 0.8 or current_ml/max_ml >= 0.8) and budget >= 3000):
-            capacity_plan["potion_capacity"] += 2
-            capacity_plan["ml_capacity"] += 1
-        budget -= 3_000
+    capacity_plan["potion_capacity"] = max_potions
+    capacity_plan["ml_capacity"] = max_ml
 
+    print(capacity_plan)
     return capacity_plan
+
 
 class CapacityPurchase(BaseModel):
     potion_capacity: int
@@ -116,14 +98,14 @@ def deliver_capacity_plan(capacity_purchase : CapacityPurchase, order_id: int):
                     gold_ledger
                     (transaction_type, transaction_id, gold)
                 VALUES
-                    ('Capacity Purchased', :order_id, :cost);
+                    ('capacity', :order_id, -:cost);
             END;
             """
         ), {
             "order_id": order_id,
             "potions": capacity_purchase.potion_capacity * 50,
             "ml": capacity_purchase.ml_capacity * 10_000,
-            "cost": -1*(capacity_purchase.potion_capacity + capacity_purchase.ml_capacity)*1_000
+            "cost": (capacity_purchase.potion_capacity + capacity_purchase.ml_capacity)*1_000
 
         })
 

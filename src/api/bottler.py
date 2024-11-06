@@ -35,15 +35,16 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
             ml_cost[key] += -1*value*p.quantity
     barrel_parameters = ml_cost
     barrel_parameters.update({"order_id": order_id})
+
     try:
         with db.engine.begin() as connection:
             # Good to go
             connection.execute(sqlalchemy.text(
                 """
                 INSERT INTO
-                    barrel_ledger (id, transaction_type, red, green, blue, dark)
+                    barrel_ledger (transaction_type, transaction_id, red, green, blue, dark)
                 VALUES
-                    (:order_id, 'Potions Bottled', :red, :green, :blue, :dark)
+                    ('potions bottled', :order_id, :red, :green, :blue, :dark);
                 """
             ), barrel_parameters)
 
@@ -53,15 +54,13 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 connection.execute(sqlalchemy.text(
                     """
                     INSERT INTO
-                        potion_ledger (id, transaction_type, potion_id, quantity)
-                        (
-                            SELECT 
-                                :order_id, 'Potions Bottled', potions.id, :quantity
-                            FROM 
-                                potions 
-                            WHERE 
-                                ARRAY[red,green,blue,dark] = :potion_type
-                        )
+                        potion_ledger (transaction_type, transaction_id, potion_sku, quantity)
+                    (SELECT
+                        'bottled', :order_id, sku, :quantity
+                    FROM
+                        potions
+                    WHERE
+                        ARRAY[red, green, blue, dark] = :potion_type);
                     """
                 ), 
                 {
@@ -87,9 +86,9 @@ def get_bottle_plan():
             stats = connection.execute(sqlalchemy.text(
                 """
                 SELECT ml, max_potions, current_potions
-                FROM potion_purchase_stats
+                FROM potion_plan_stats
                 """
-            )).first()
+            )).one()
 
             # Get top selling potions based on order data
             top_potions = connection.execute(sqlalchemy.text(
