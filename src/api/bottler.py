@@ -90,27 +90,31 @@ def get_bottle_plan():
                 """
             )).one()
 
-            # Get top selling potions based on order data
-            top_potions = connection.execute(sqlalchemy.text(
-                """
-                SELECT sku, name, potion_type, weight
-                FROM potion_plan
-                """
-            ))
-
             starter_potion = connection.execute(sqlalchemy.text(
                 """
                 SELECT starter_potion
                 FROM barrel_constants
                 """
             )).one()
+
+            # Get top selling potions based on order data
+            top_potions = connection.execute(sqlalchemy.text(
+                """
+                SELECT sku, name, potion_type, weight
+                FROM potion_plan
+                WHERE not potion_type = :starter_potion
+                """
+            ), {"starter_potion": starter_potion.starter_potion})
+
+            
             
         current_ml = stats.ml
         max_potions = stats.max_potions
         current_potions = stats.current_potions
         top_potions = [p._asdict() for p in top_potions]
         print(top_potions)
-        potion_plan = flood_fill_potions(top_potions, starter_potion.starter_potion, max_potions-current_potions, current_ml)
+
+        potion_plan = fill_potion_plan(top_potions, starter_potion.starter_potion, max_potions-current_potions, current_ml)
 
 
     except Exception:
@@ -119,7 +123,7 @@ def get_bottle_plan():
     print(f"Potion Plan: {potion_plan}")
     return potion_plan
 
-def flood_fill_potions(potions, starter_potion, capacity, ml):
+def fill_potion_plan(potions, starter_potion, capacity, ml):
     '''
     potions = {potion_sku, potion_name, potion_type, weight}
     capacity = max_potions - current_sum_potions
