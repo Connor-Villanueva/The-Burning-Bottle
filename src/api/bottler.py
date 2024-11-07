@@ -101,8 +101,9 @@ def get_bottle_plan():
             top_potions = connection.execute(sqlalchemy.text(
                 """
                 SELECT sku, name, potion_type, weight
-                FROM potion_plan
+                FROM bottle_plan
                 WHERE not potion_type = :starter_potion
+                limit 6
                 """
             ), {"starter_potion": starter_potion.starter_potion})
 
@@ -112,12 +113,10 @@ def get_bottle_plan():
         max_potions = stats.max_potions
         current_potions = stats.current_potions
         top_potions = [p._asdict() for p in top_potions]
-        print(top_potions)
-
-        potion_plan = fill_potion_plan(top_potions, starter_potion.starter_potion, max_potions-current_potions, current_ml)
-
-
-    except Exception:
+        potion_plan = fill_potion_plan(top_potions, starter_potion.starter_potion, int(max_potions-current_potions), current_ml)
+        
+    except Exception as e:
+        print("Error:", e)
         print("Error occured while fetching data")
     
     print(f"Potion Plan: {potion_plan}")
@@ -134,23 +133,23 @@ def fill_potion_plan(potions, starter_potion, capacity, ml):
     '''
     bottle_plan = []
 
-    total_weight = sum(p['weight']for p in potions)
+    total_weight = sum(p["weight"] for p in potions)
     remaning_capacity = capacity
     if (total_weight > 0):
         for potion in potions:
-            proportion = potion['weight']/ total_weight
+            proportion = potion["weight"] / total_weight
             
-            max_potions_ml = min([b//p for (b,p) in zip(ml, potion['potion_type']) if not p == 0])
+            max_potions_ml = min([b//p for (b,p) in zip(ml, potion["potion_type"]) if not p == 0])
             max_potions_weight = int(capacity * proportion) if int(capacity * proportion) > 0 else 5
             assigned_quantity = min(max_potions_ml, max_potions_weight, remaning_capacity)
             
-            print(f"Trying to assign: {assigned_quantity}")
+            # print(f"Trying to assign: {assigned_quantity}")
             if (assigned_quantity > 0):
                 bottle_plan.append({
-                    "potion_type": potion['potion_type'],
+                    "potion_type": potion["potion_type"],
                     "quantity": assigned_quantity
                 })
-            ml = [b-p*assigned_quantity for (b,p) in zip(ml, potion['potion_type'])]
+            ml = [b-p*assigned_quantity for (b,p) in zip(ml, potion["potion_type"])]
 
             if (remaning_capacity <= 0):
                 break
@@ -159,7 +158,7 @@ def fill_potion_plan(potions, starter_potion, capacity, ml):
     # 1. Capacity is full
     # 2. Start of the game
     if (not bottle_plan):
-        print("bottle plan was empty")
+        # print("bottle plan was empty")
         max_potions_ml = min([b//p for (b,p) in zip(ml, starter_potion) if not p == 0])
         assigned_quantity = min(max_potions_ml, remaning_capacity)
 
