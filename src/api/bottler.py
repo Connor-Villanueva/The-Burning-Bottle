@@ -85,7 +85,7 @@ def get_bottle_plan():
         with db.engine.begin() as connection:
             stats = connection.execute(sqlalchemy.text(
                 """
-                SELECT ml, max_potions, current_potions
+                SELECT ml, max_potions, current_potions, hour
                 FROM potion_plan_stats
                 """
             )).one()
@@ -107,8 +107,11 @@ def get_bottle_plan():
                 """
             ), {"starter_potion": starter_potion.starter_potion})
 
-            
-            
+        # Don't bottle for the last tick of the day
+        # Maybe change this to an adjustable constant in db
+        if (stats.hour >= 22):
+            return potion_plan
+        
         current_ml = stats.ml
         max_potions = stats.max_potions
         current_potions = stats.current_potions
@@ -117,7 +120,6 @@ def get_bottle_plan():
         
     except Exception as e:
         print("Error:", e)
-        print("Error occured while fetching data")
     
     print(f"Potion Plan: {potion_plan}")
     return potion_plan
