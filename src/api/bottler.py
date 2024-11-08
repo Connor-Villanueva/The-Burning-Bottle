@@ -29,10 +29,22 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
         "blue": 0,
         "dark": 0
     }
+    potion_parameters = []
     
+    # Building total ml cost and parameter for each potion insert
     for p in potions_delivered:
+        sku = f"RGBD_{p.potion_type[0]}_{p.potion_type[1]}_{p.potion_type[2]}_{p.potion_type[3]}"
+        potion_parameters.append(
+            {
+                "order_id": order_id,
+                "sku": sku,
+                "quantity": p.quantity
+            }
+        )
+
         for key, value in zip(ml_cost.keys(), p.potion_type):
-            ml_cost[key] += -1*value*p.quantity
+            ml_cost[key] -= value*p.quantity
+        
     barrel_parameters = ml_cost
     barrel_parameters.update({"order_id": order_id})
 
@@ -48,26 +60,15 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
                 """
             ), barrel_parameters)
 
-            # Insert potions into potion_ledger
-            # I hate this, but its fine for now
-            for p in potions_delivered:
-                connection.execute(sqlalchemy.text(
-                    """
-                    INSERT INTO
-                        potion_ledger (transaction_type, transaction_id, potion_sku, quantity)
-                    (SELECT
-                        'bottled', :order_id, sku, :quantity
-                    FROM
-                        potions
-                    WHERE
-                        ARRAY[red, green, blue, dark] = :potion_type);
-                    """
-                ), 
-                {
-                    "potion_type": p.potion_type,
-                    "quantity": p.quantity,
-                    "order_id": order_id
-                })
+            connection.execute(sqlalchemy.text(
+                """
+                INSERT INTO
+                    potion_ledger (transaction_type, transaction_id, potion_sku, quantity)
+                VALUES
+                    ('bottled', :order_id, :sku, :quantity)
+                """
+            ), tuple(potion_parameters))
+
     except IntegrityError as e:
         print("Error:", e)
         print("Order already delivered")

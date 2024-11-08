@@ -56,17 +56,9 @@ def search_orders(
     """
 
     results = []
-    page = 1 if search_page == "" else int(search_page)
+    search_page = int(search_page) if search_page is not "" else 0
     
     with db.engine.begin() as connection:
-        total_entries = connection.execute(sqlalchemy.text(
-            """
-            SELECT
-                count(*) as total
-            FROM completed_orders
-            """
-        )).one()
-
         search_result = connection.execute(sqlalchemy.text(
             f"""
             SELECT
@@ -82,9 +74,9 @@ def search_orders(
             LIMIT 5 OFFSET :page
              """
         ), {
-            "customer_name": customer_name,
-            "potion_sku": potion_sku,
-            "page": page
+            "customer_name": "%" + customer_name + "%",
+            "potion_sku": "%" + potion_sku + "%",
+            "page": search_page
         })
     
     for row in search_result:
@@ -94,25 +86,15 @@ def search_orders(
                 "item_sku": f"{row.quantity} {row.item_sku}",
                 "customer_name": row.customer_name,
                 "line_item_total": row.line_item_total,
-                "timestamp": timestamp
+                "timestamp": row.timestamp
             }
         )
 
     return {
-        "previous": "" if page == 1 else f"{page-1}",
-        "next": "" if total_entries.total // page == 0 else f"{page+1}",
+        "previous": "" if int(search_page) < 5 else f"{int(search_page)-5}",
+        "next": "" if int(search_page) - 5 > 0 else f"{int(search_page) + 5}",
         "results": results,
     }
-
-# results: [
-#     {
-#         "line_item_id": 1,
-#         "item_sku": "1 oblivion potion",
-#         "customer_name": "Scaramouche",
-#         "line_item_total": 50,
-#         "timestamp": "2021-01-01T00:00:00Z",
-#     }
-# ]
 
 class Customer(BaseModel):
     customer_name: str
@@ -260,6 +242,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         # Also add their order to completed orders
         # On average, only executes once per customer
         for item in items_purchased:
+
+            # Checkout cart, return cart_id
             order_id = connection.execute(sqlalchemy.text(
                 """
                 INSERT INTO
@@ -273,6 +257,8 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 RETURNING id
                 """
             ), {"potion_sku": item.potion_sku, "quantity": item.quantity, "cart_id": cart_id, "cost": item.price * item.quantity}).one()
+
+            # Add order to completed_orders using the cart_id as order_id
             connection.execute(sqlalchemy.text(
                 """
                 INSERT INTO
@@ -281,6 +267,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                     ('sold', :order_id, :potion_sku, -:quantity)
                 """
             ), {"order_id": order_id.id, "potion_sku": item.potion_sku, "quantity": item.quantity})
+
             gold += item.price * item.quantity
             potions_sold += item.quantity
 
