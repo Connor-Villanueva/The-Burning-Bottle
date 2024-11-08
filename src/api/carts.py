@@ -4,6 +4,7 @@ from src.api import auth
 from enum import Enum
 import sqlalchemy
 from src import database as db
+from datetime import datetime
 
 router = APIRouter(
     prefix="/carts",
@@ -54,19 +55,64 @@ def search_orders(
     time is 5 total line items.
     """
 
-    return {
-        "previous": "",
-        "next": "",
-        "results": [
+    results = []
+    page = 1 if search_page == "" else int(search_page)
+    
+    with db.engine.begin() as connection:
+        total_entries = connection.execute(sqlalchemy.text(
+            """
+            SELECT
+                count(*) as total
+            FROM completed_orders
+            """
+        )).one()
+
+        search_result = connection.execute(sqlalchemy.text(
+            f"""
+            SELECT
+                line_item_id, customer_name, quantity, item_sku, line_item_total, timestamp
+            FROM
+                search_orders
+            WHERE
+                1=1
+                {"and customer_name ilike :customer_name" if customer_name != "" else ""}
+                {"and item_sku ilike :potion_sku" if potion_sku != "" else ""}
+            ORDER BY
+                {sort_col.value} {sort_order.value}
+            LIMIT 5 OFFSET :page
+             """
+        ), {
+            "customer_name": customer_name,
+            "potion_sku": potion_sku,
+            "page": page
+        })
+    
+    for row in search_result:
+        results.append(
             {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
+                "line_item_id": row.line_item_id,
+                "item_sku": f"{row.quantity} {row.item_sku}",
+                "customer_name": row.customer_name,
+                "line_item_total": row.line_item_total,
+                "timestamp": timestamp
             }
-        ],
+        )
+
+    return {
+        "previous": "" if page == 1 else f"{page-1}",
+        "next": "" if total_entries.total // page == 0 else f"{page+1}",
+        "results": results,
     }
+
+# results: [
+#     {
+#         "line_item_id": 1,
+#         "item_sku": "1 oblivion potion",
+#         "customer_name": "Scaramouche",
+#         "line_item_total": 50,
+#         "timestamp": "2021-01-01T00:00:00Z",
+#     }
+# ]
 
 class Customer(BaseModel):
     customer_name: str
