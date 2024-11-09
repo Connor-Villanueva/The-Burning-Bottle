@@ -67,7 +67,6 @@ def search_orders(
                 search_orders
             """
         )).one()
-        print(size_of_orders.total)
 
         search_result = connection.execute(sqlalchemy.text(
             f"""
