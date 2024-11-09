@@ -56,9 +56,19 @@ def search_orders(
     """
 
     results = []
-    search_page = int(search_page) if search_page is not "" else 0
+    search_page = int(search_page) if search_page != "" else 0
     
     with db.engine.begin() as connection:
+        size_of_orders = connection.execute(sqlalchemy.text(
+            """
+            SELECT
+                count(*) as total
+            FROM
+                search_orders
+            """
+        )).one()
+        print(size_of_orders.total)
+
         search_result = connection.execute(sqlalchemy.text(
             f"""
             SELECT
@@ -66,17 +76,17 @@ def search_orders(
             FROM
                 search_orders
             WHERE
-                1=1
-                {"and customer_name ilike :customer_name" if customer_name != "" else ""}
-                {"and item_sku ilike :potion_sku" if potion_sku != "" else ""}
+                customer_name ilike :customer_name
+                and
+                item_sku ilike :potion_sku
             ORDER BY
                 {sort_col.value} {sort_order.value}
             LIMIT 5 OFFSET :page
              """
         ), {
-            "customer_name": "%" + customer_name + "%",
-            "potion_sku": "%" + potion_sku + "%",
-            "page": search_page
+            "customer_name":  f"%{customer_name}%",
+            "potion_sku": f"%{potion_sku}%",
+            "page": int(search_page)
         })
     
     for row in search_result:
@@ -92,7 +102,7 @@ def search_orders(
 
     return {
         "previous": "" if int(search_page) < 5 else f"{int(search_page)-5}",
-        "next": "" if int(search_page) - 5 > 0 else f"{int(search_page) + 5}",
+        "next": "" if int(search_page) >= size_of_orders.total else f"{int(search_page) + 5}",
         "results": results,
     }
 
@@ -109,34 +119,40 @@ def post_visits(visit_id: int, customers: list[Customer]):
     print(f"Customer visits: {customers}\n")
 
     class_visits = {
-        "Barbarian": 0,
-        "Bard": 0,
-        "Cleric": 0,
-        "Druid": 0,
-        "Fighter": 0,
-        "Monk": 0,
-        "Paladin": 0,
-        "Ranger": 0,
-        "Rogue": 0,
-        "Warlock": 0,
-        "Wizard": 0
+        "barbarian": 0,
+        "bard": 0,
+        "cleric": 0,
+        "druid": 0,
+        "fighter": 0,
+        "monk": 0,
+        "paladin": 0,
+        "ranger": 0,
+        "rogue": 0,
+        "warlock": 0,
+        "wizard": 0
     }
 
     for customer in customers:
-        class_visits[customer.character_class] += 1
+        class_visits[customer.character_class.lower()] += 1
+    
+    parameters = class_visits
+    parameters.update({"visit_id" : visit_id})
     
     # Keep track of the number of visitors per tick
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(
             """
-            UPDATE
-                ticks
-            SET 
-                visits = :visits
-            WHERE
-                id = (SELECT id FROM current_tick)
+            INSERT into
+                visits 
+                (id, tick_id, barbarian, bard, cleric, druid, fighter, monk, paladin, ranger, rogue, warlock, wizard)
+                (SELECT
+                    :visit_id, current_tick.id, :barbarian, :bard, :cleric, :druid, :fighter, :monk, :paladin, :ranger, :rogue, :warlock, :wizard
+                FROM
+                    current_tick
+                )
+
             """
-        ), {"visits": [int(i) for i in class_visits.values()]})
+        ), parameters)
     print(class_visits)
     return "OK"
                 
