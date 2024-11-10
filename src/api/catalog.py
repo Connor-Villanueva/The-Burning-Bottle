@@ -19,7 +19,7 @@ def get_catalog():
                 SELECT
                     sku, name, potion_type, quantity, price
                 FROM
-                    catalog
+                    potential_catalog
                 """
             ))
 

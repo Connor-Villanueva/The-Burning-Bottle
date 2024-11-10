@@ -240,13 +240,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         items_purchased = connection.execute(sqlalchemy.text(
             """
             SELECT
-                potion_sku, quantity, price
+                potion_sku, cart_items.quantity, price
             FROM
                 cart_items
             JOIN
-                potions on potion_sku = potions.sku
+                potential_catalog on potion_sku = potential_catalog.sku
             WHERE
-                id = :cart_id
+                cart_items.id = :cart_id
             """
         ), {"cart_id": cart_id})
 
