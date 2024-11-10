@@ -98,10 +98,11 @@ def search_orders(
                 "timestamp": row.timestamp
             }
         )
-
+    print(search_page)
+    print(size_of_orders.total)
     return {
         "previous": "" if int(search_page) < 5 else f"{int(search_page)-5}",
-        "next": "" if int(search_page) >= size_of_orders.total else f"{int(search_page) + 5}",
+        "next": "" if (search_page + 5) >= size_of_orders.total else f"{int(search_page) + 5}",
         "results": results,
     }
 
