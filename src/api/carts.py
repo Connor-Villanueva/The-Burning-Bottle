@@ -65,8 +65,15 @@ def search_orders(
                 count(*) as total
             FROM
                 search_orders
+            WHERE
+                customer_name ilike :customer_name
+                and
+                item_sku ilike :potion_sku
             """
-        )).one()
+        ), {
+            "customer_name": f"%{customer_name}%",
+            "potion_sku": f"%{potion_sku}%"
+        }).one()
 
         search_result = connection.execute(sqlalchemy.text(
             f"""
