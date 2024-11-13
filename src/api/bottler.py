@@ -103,7 +103,7 @@ def get_bottle_plan():
                 """
                 SELECT sku, name, potion_type, weight
                 FROM bottle_plan
-                WHERE not potion_type = :starter_potion
+                ORDER BY weight desc
                 limit 6
                 """
             ), {"starter_potion": starter_potion.starter_potion})
