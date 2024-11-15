@@ -5,6 +5,7 @@ from src.api import auth
 import sqlalchemy
 from sqlalchemy.exc import IntegrityError
 from src import database as db
+from random import shuffle
 
 router = APIRouter(
     prefix="/bottler",
@@ -134,10 +135,15 @@ def fill_potion_plan(potions, starter_potion, capacity, ml):
     Only bottle top selling potions according
     Attempt to bottle according to weight 
     '''
+    
+    # If all weights are default, shuffle potion bottling
+    if (all(p["weight"] for p in potions) == 1):
+        shuffle(potions)
+    
     bottle_plan = []
-
     total_weight = sum(p["weight"] for p in potions)
     remaning_capacity = capacity
+    
     if (total_weight > 0):
         for potion in potions:
             proportion = potion["weight"] / total_weight
@@ -146,7 +152,6 @@ def fill_potion_plan(potions, starter_potion, capacity, ml):
             max_potions_weight = int(capacity * proportion) if int(capacity * proportion) > 0 else 5
             assigned_quantity = min(max_potions_ml, max_potions_weight, remaning_capacity)
             
-            # print(f"Trying to assign: {assigned_quantity}")
             if (assigned_quantity > 0):
                 bottle_plan.append({
                     "potion_type": potion["potion_type"],
