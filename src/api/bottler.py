@@ -153,6 +153,7 @@ def fill_potion_plan(potions, starter_potion, capacity, ml):
                     "quantity": assigned_quantity
                 })
             ml = [b-p*assigned_quantity for (b,p) in zip(ml, potion["potion_type"])]
+            remaning_capacity -= assigned_quantity
 
             if (remaning_capacity <= 0):
                 break
