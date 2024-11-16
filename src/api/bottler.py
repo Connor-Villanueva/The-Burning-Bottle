@@ -104,6 +104,7 @@ def get_bottle_plan():
                 """
                 SELECT sku, name, potion_type, weight
                 FROM bottle_plan
+                WHERE potion_type != ARRAY[0,60,40,0]
                 ORDER BY weight desc
                 limit 6
                 """
