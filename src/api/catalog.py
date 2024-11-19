@@ -20,6 +20,9 @@ def get_catalog():
                     sku, name, potion_type, quantity, price
                 FROM
                     catalog
+                ORDER BY
+                    weight desc, quantity desc
+                LIMIT 6
                 """
             ))
 
