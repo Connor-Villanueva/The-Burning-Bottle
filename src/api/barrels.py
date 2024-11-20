@@ -155,7 +155,7 @@ def fill_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: lis
             budget_each = budget // 4
             if (big_barrels is not None):
                 for barrel in big_barrels:
-                    if (barrel.potion_type == type and (ml_needed/ (max_ml/4)) > constants.min_barrel_proportion):
+                    if (barrel.potion_type == type and (ml_needed/ (max_ml/4)) < constants.min_barrel_proportion):
                         max_qty = ml_needed // barrel.ml_per_barrel
                         max_qty = min(max_qty, budget // barrel.price, barrel.quantity)
 
@@ -170,7 +170,7 @@ def fill_barrel_plan(gold: int, current_ml: list[int], max_ml: int, catalog: lis
                             budget_each -= barrel.price * max_qty
             elif (small_barrels is not None):
                 for barrel in small_barrels:
-                    if (barrel.potion_type == type and (ml_needed/ (max_ml/4)) > constants.min_barrel_proportion):
+                    if (barrel.potion_type == type and (ml_needed/ (max_ml/4)) < constants.min_barrel_proportion):
                         max_qty = ml_needed // barrel.ml_per_barrel
                         max_qty = min(max_qty, budget // barrel.price, barrel.quantity)
 
